@@ -36,6 +36,8 @@ Local runs may use a gitignored `phpunit.xml` (copied from `phpunit.xml.dist`) t
 - No savepoints; nested transactions are flattened.
 - An unconditional `DELETE` with `foreign_key_checks = 0` corrupts FK metadata — keep the `where 1 = 1` safeguard.
 - 4.2.4: inserting into a table with both a foreign key and a FULLTEXT index panics.
+- `LAST_INSERT_ID()` is wrong on tables with a FULLTEXT index; `insertGetId()` must keep using `insert ... returning`.
+- JSON columns accept neither defaults nor indexes; the grammar throws unless `ignore_json_defaults` / `ignore_json_indexes` is set.
 
 ## Code Comments Language
 

@@ -69,6 +69,8 @@ The driver accepts every option of Laravel's `mysql` driver (`read` / `write` ho
 
 | Option | Default | Description |
 |--------|---------|-------------|
+| `ignore_json_defaults` | `false` | MatrixOne rejects default values on JSON columns. By default a migration declaring one fails with a clear error. Set to `true` to drop such defaults instead; the column then becomes nullable so inserts that relied on the default keep working (they store `NULL`). |
+| `ignore_json_indexes` | `false` | MatrixOne cannot index JSON columns. By default an `index()` / `unique()` on a JSON column fails with a clear error. Set to `true` to skip those indexes. Useful when running migrations written for PostgreSQL (`->algorithm('GIN')`). |
 | `emulate_prepares` | `true` | Use PDO emulated prepares. MatrixOne rejects placeholders in some positions (for example inside `MATCH ... AGAINST`) and its server-side prepared statements have known metadata caching issues. Set to `false` to use native prepares. An explicit `PDO::ATTR_EMULATE_PREPARES` in `options` takes precedence. |
 
 ## Running MatrixOne locally

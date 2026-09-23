@@ -21,6 +21,7 @@
 | `truncate()` | Falls back to `DELETE` when the table is referenced by a foreign key (MatrixOne refuses to truncate it). |
 | `joinLateral()` | Throws — lateral joins are not supported. |
 | `exists()` | Works; the driver maps MatrixOne's `"true"`/`"false"` strings to real booleans. |
+| `insertGetId()` / Eloquent `create()` | Uses `insert ... returning <key>`, because `LAST_INSERT_ID()` is wrong on tables with a FULLTEXT index. |
 
 ::: warning Raw boolean expressions
 MatrixOne returns boolean expressions such as `select a = b` as the strings `"true"` and `"false"`. In PHP `(bool) "false"` is `true`. The driver handles this for its own queries; in raw SQL wrap such expressions with `if(expr, 1, 0)`.
@@ -33,8 +34,12 @@ MatrixOne returns boolean expressions such as `select a = b` as the strings `"tr
 | `where('meta->a->b', ...)`, `select('meta->a')`, `orderBy('meta->a')` | ✓ |
 | `where('meta->flag', true)` | ✓ |
 | `update(['meta->a' => 1])` | ✓ |
-| `whereJsonContainsKey()` / `whereJsonDoesntContainKey()` | ✓ (a key explicitly set to JSON `null` counts as missing) |
-| `whereJsonContains()`, `whereJsonOverlaps()`, `whereJsonLength()` | ✗ throws `RuntimeException` |
+| `whereJsonContainsKey()` / `whereJsonDoesntContainKey()` | ✓ |
+| `whereJsonContains()` / `whereJsonDoesntContain()` | ✓ |
+| `whereJsonLength()` | ✓ |
+| `whereJsonOverlaps()` | ✓ (compiled as `json_overlaps(json_extract(col, path), value)`) |
+
+The `->` and `->>` operators also work in raw SQL; MatrixOne rewrites them to `json_extract()` and `json_unquote(json_extract())`.
 
 ## Full-text search
 

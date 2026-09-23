@@ -23,7 +23,7 @@
 | `decimal()`, `float()`, `double()` | same | |
 | `boolean()` | `tinyint(1)` | |
 | `enum()` | `enum` | |
-| `json()`, `jsonb()` | `json` | |
+| `json()`, `jsonb()` | `json` | no default values, no indexes (see below) |
 | `date()`, `dateTime()`, `time()`, `timestamp()` | same | precision, `useCurrent()`, `useCurrentOnUpdate()` supported |
 | `year()` | `smallint` | MatrixOne has no `YEAR` type |
 | `uuid()`, `ulid()` | `char(36)`, `char(26)` | MatrixOne's native `UUID` type is not readable by PHP's mysqlnd |
@@ -38,7 +38,18 @@
 
 ## Indexes
 
-`primary()`, `unique()`, `index()` and their `drop*` counterparts work. The index algorithm argument (`USING BTREE`) is ignored because MatrixOne rejects it. `renameIndex()` is emulated by dropping and re-creating the index.
+`primary()`, `unique()`, `index()` and their `drop*` counterparts work. The index algorithm argument (`USING BTREE`, `GIN`...) is ignored because MatrixOne rejects it. `renameIndex()` is emulated by dropping and re-creating the index.
+
+Index names longer than MatrixOne's 64-character limit are shortened to a 56-character prefix plus a hash of the full name. The same shortening is applied by `dropIndex()`, `dropUnique()`, `renameIndex()` and `Schema::hasIndex()`, so Laravel's generated names keep working. `Schema::getIndexes()` reports the shortened name.
+
+### JSON columns
+
+MatrixOne rejects default values on JSON columns and cannot index them. By default the driver fails with a clear error instead of sending invalid DDL. For migrations written for another database, two connection options relax this (see [Installation › Configuration options](./installation#configuration-options)):
+
+- `ignore_json_defaults` drops the default and makes the column nullable.
+- `ignore_json_indexes` skips `index()` / `unique()` on JSON columns.
+
+JSON columns are detected among the columns of the same blueprint and, when altering an existing table, from the catalog.
 
 Foreign keys (`foreignId()->constrained()`, `cascadeOnDelete()`, `dropForeign()`) are supported, and `Schema::disableForeignKeyConstraints()` works.
 

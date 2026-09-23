@@ -12,7 +12,9 @@ MatrixOne speaks the MySQL 8.0 protocol but implements a subset of MySQL. This p
 | `RAND()` accepts no seed | The seed is dropped |
 | No `performance_schema` | `threadCount()` counts `information_schema.processlist` |
 | No savepoints | Nested transactions are flattened (see [Eloquent › Transactions](./eloquent#transactions)) |
-| No `json_contains_path()` | `whereJsonContainsKey()` uses `json_extract(...) is not null` |
+| `json_overlaps()` takes exactly two documents | The JSON path is applied with `json_extract()` |
+| `LAST_INSERT_ID()` is wrong on tables with a FULLTEXT index | `insertGetId()` uses `insert ... returning` |
+| Identifiers are limited to 64 characters | Long index names are shortened consistently |
 | JSON booleans cannot be compared with SQL `true` | Compared as unquoted text |
 | `TRUNCATE` refused on tables referenced by foreign keys | Falls back to `DELETE` |
 | Unconditional `DELETE` with foreign key checks disabled corrupts FK metadata | `where 1 = 1` is appended |
@@ -30,7 +32,8 @@ MatrixOne speaks the MySQL 8.0 protocol but implements a subset of MySQL. This p
 
 - `set()`, `geometry()`, `geography()` columns
 - Generated columns (`virtualAs()`, `storedAs()`)
-- `whereJsonContains()`, `whereJsonOverlaps()`, `whereJsonLength()`
+- Default values on JSON columns (unless `ignore_json_defaults` is set)
+- Indexes on JSON columns (unless `ignore_json_indexes` is set)
 - `joinLateral()`
 - `schema:dump`
 - Changing the auto-increment start of an existing table
