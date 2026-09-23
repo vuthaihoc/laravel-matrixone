@@ -123,6 +123,17 @@ class QueryBuilderTest extends TestCase
         $this->assertCount(2, $page->items());
     }
 
+    public function testLikeMatchesCaseInsensitivelyLikeMysql(): void
+    {
+        $this->seedUsers();
+
+        // MatrixOne's LIKE ignores the _ci collation; the driver uses ILIKE.
+        $this->assertSame(['alice'], DB::table('qb_users')->where('email', 'like', 'ALICE%')->pluck('name')->all());
+        $this->assertSame(['alice'], DB::table('qb_users')->whereLike('email', 'ALICE%')->pluck('name')->all());
+        $this->assertSame([], DB::table('qb_users')->whereLike('email', 'ALICE%', caseSensitive: true)->pluck('name')->all());
+        $this->assertSame(2, DB::table('qb_users')->where('email', 'not like', 'ALICE%')->count());
+    }
+
     public function testDateBasedWheres(): void
     {
         $this->seedUsers();

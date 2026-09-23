@@ -108,6 +108,45 @@ class GrammarTest extends TestCase
         );
     }
 
+    public function testJsonUpdatesOfOneColumnShareOneJsonSet(): void
+    {
+        $query = $this->query()->from('docs')->where('id', 1);
+        $values = [
+            'name' => 'n',
+            'data->flag' => true,
+            'data->tags' => ['a'],
+            'other' => 2,
+            'data->ratio' => 1.5,
+            'meta->x' => 'y',
+        ];
+
+        $this->assertSame(
+            'update `docs` set `name` = ?, `data` = json_set(`data`, \'$."flag"\', true, \'$."tags"\', cast(? as json), \'$."ratio"\', cast(? as json)), '
+            .'`other` = ?, `meta` = json_set(`meta`, \'$."x"\', ?) where `id` = ?',
+            $query->getGrammar()->compileUpdate($query, $values)
+        );
+        $this->assertSame(
+            ['n', '["a"]', 1.5, 2, 'y', 1],
+            $query->getGrammar()->prepareBindingsForUpdate($query->getRawBindings(), $values)
+        );
+    }
+
+    public function testLikeIsCaseInsensitiveUnlessBinary(): void
+    {
+        $this->assertSame(
+            'select * from `users` where `name` ilike ? and `name` not ilike ? and `name` like binary ? and `name` not like binary ? and `name` like binary ? having `name` ilike ?',
+            $this->query()->from('users')
+                ->where('name', 'like', 'a%')
+                ->where('name', 'not like', 'b%')
+                ->whereLike('name', 'C%', caseSensitive: true)
+                ->whereNotLike('name', 'D%', caseSensitive: true)
+                ->where('name', 'like binary', 'E%')
+                ->having('name', 'like', 'f%')
+                ->toSql()
+        );
+        $this->assertSame('select * from `users` where `name` ilike ?', $this->query()->from('users')->whereLike('name', 'a%')->toSql());
+    }
+
     public function testJsonOverlapsPassesTwoDocuments(): void
     {
         $this->assertSame(

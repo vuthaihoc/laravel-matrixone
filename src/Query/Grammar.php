@@ -93,6 +93,158 @@ class Grammar extends MySqlGrammar
     /**
      * {@inheritDoc}
      *
+     * MatrixOne evaluates every SET assignment against the original row, so
+     * `data = json_set(data, a), data = json_set(data, b)` would keep only
+     * the last change. All JSON paths of one column are merged into a single
+     * `json_set(column, path1, value1, path2, value2, ...)` call instead.
+     *
+     * @param  array<string, mixed>  $values
+     */
+    protected function compileUpdateColumns(Builder $query, array $values)
+    {
+        // Each segment is [plain assignment or null, JSON field, JSON path/value pairs].
+        /** @var list<array{0: string|null, 1: string, 2: string}> $segments */
+        $segments = [];
+
+        foreach ($this->groupJsonUpdateValues($values) as $key => $value) {
+            if (! $this->isJsonSelector($key)) {
+                $segments[] = [$this->wrap($key).' = '.$this->parameter($value), '', ''];
+
+                continue;
+            }
+
+            [$field, $path] = $this->wrapJsonFieldAndPath($key);
+            $pair = $path.', '.$this->compileJsonUpdateValue($value);
+            $last = count($segments) - 1;
+
+            // Grouped paths of the same column extend the same json_set().
+            if ($last >= 0 && $segments[$last][0] === null && $segments[$last][1] === $field) {
+                $segments[$last][2] .= $pair;
+            } else {
+                $segments[] = [null, $field, $pair];
+            }
+        }
+
+        return implode(', ', array_map(
+            fn (array $segment) => $segment[0] ?? "{$segment[1]} = json_set({$segment[1]}{$segment[2]})",
+            $segments
+        ));
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * Bindings follow the same grouping as compileUpdateColumns().
+     *
+     * @param  array<string, array<int, mixed>>  $bindings
+     * @param  array<string, mixed>  $values
+     * @return array<int, mixed>
+     */
+    public function prepareBindingsForUpdate(array $bindings, array $values)
+    {
+        return parent::prepareBindingsForUpdate($bindings, $this->groupJsonUpdateValues($values));
+    }
+
+    /**
+     * Reorder update values so all JSON paths of a column follow each other,
+     * at the position of that column's first path.
+     *
+     * @param  array<string, mixed>  $values
+     * @return array<string, mixed>
+     */
+    protected function groupJsonUpdateValues(array $values): array
+    {
+        $groups = [];
+
+        foreach ($values as $key => $value) {
+            $group = $this->isJsonSelector($key) ? 'json:'.$this->wrapJsonFieldAndPath($key)[0] : 'column:'.$key;
+
+            $groups[$group][$key] = $value;
+        }
+
+        return array_merge(...array_values($groups));
+    }
+
+    /**
+     * Compile the value of one JSON path update.
+     *
+     * PDO sends floats as strings, which json_set() would store as JSON
+     * strings; casting keeps them JSON numbers, like arrays stay documents.
+     */
+    protected function compileJsonUpdateValue(mixed $value): string
+    {
+        return match (true) {
+            is_bool($value) => $value ? 'true' : 'false',
+            is_array($value), is_float($value) => 'cast(? as json)',
+            default => $this->parameter($value),
+        };
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * MatrixOne's LIKE is case-sensitive regardless of the column collation,
+     * so case-insensitive matches use ILIKE; case-sensitive ones keep
+     * `like binary`.
+     *
+     * @param  array<string, mixed>  $where
+     */
+    protected function whereLike(Builder $query, $where)
+    {
+        $where['operator'] = ($where['not'] ? 'not ' : '').($where['caseSensitive'] ? 'like binary' : 'ilike');
+
+        return $this->whereBasic($query, $where);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * A plain `like` / `not like` operator becomes ILIKE, matching MySQL's
+     * behaviour on the case-insensitive collations Laravel creates tables
+     * with. Use `like binary` for a case-sensitive match.
+     *
+     * @param  array<string, mixed>  $where
+     */
+    protected function whereBasic(Builder $query, $where)
+    {
+        $where['operator'] = $this->caseInsensitiveLike($where['operator']);
+
+        return parent::whereBasic($query, $where);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * @param  array<string, mixed>  $having
+     */
+    protected function compileHaving(array $having)
+    {
+        if (isset($having['operator'])) {
+            $having['operator'] = $this->caseInsensitiveLike($having['operator']);
+        }
+
+        return parent::compileHaving($having);
+    }
+
+    /**
+     * Map `like` / `not like` to their case-insensitive ILIKE forms.
+     */
+    protected function caseInsensitiveLike(mixed $operator): mixed
+    {
+        if (! is_string($operator)) {
+            return $operator;
+        }
+
+        return match (strtolower($operator)) {
+            'like' => 'ilike',
+            'not like' => 'not ilike',
+            default => $operator,
+        };
+    }
+
+    /**
+     * {@inheritDoc}
+     *
      * MatrixOne has no `lock in share mode` / `for share`; a shared lock is
      * promoted to `for update`, which is stricter but never less safe.
      */
