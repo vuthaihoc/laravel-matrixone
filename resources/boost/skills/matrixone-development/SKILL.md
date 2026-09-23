@@ -89,6 +89,8 @@ Article::searchFullText(['title', 'body'], $term)->limit(20)->get();            
 Article::select('id')->selectFullTextRelevance(['title', 'body'], $term, as: 'score')->get();
 ```
 
+MatrixOne's natural language mode only matches words appearing together (MySQL matches any word): for search boxes use `FullTextQuery::anyOf($input)`. Build boolean queries with `MatrixOne\Support\FullTextQuery` (`must()`, `mustNot()`, `encourage()`, `discourage()`, `phrase()`, `prefix()`) and `whereFullTextQuery()` / `searchFullText()`; a phrase only works as the whole query. Set `'variables' => ['ft_relevancy_algorithm' => 'BM25']` for better ranking.
+
 Query expansion (`['expanded' => true]`) throws. The columns must match one FULLTEXT index. MatrixOne cannot OR a `MATCH ... AGAINST` with other conditions: write `->orWhereIn('id', DB::table('t')->select('id')->whereFullText(...))` instead of `->orWhereFullText(...)` next to other wheres.
 
 Laravel Scout: use `SCOUT_DRIVER=matrixone` (not `database`): it handles full-text + LIKE columns, orders by relevance and supports `->semantic()` / `->hybrid()` with a `vector('embedding', n)` column and `toSearchableEmbedding()`.
@@ -126,6 +128,11 @@ DB::connection('matrixone')->withSessionVariables(['experimental_fulltext2_index
 
 Useful variables: `ft_relevancy_algorithm` (`TF-IDF`/`BM25`, typos are accepted silently), `fulltext_bloom_filter_pushdown`, `experimental_fulltext2_index`, `experimental_hnsw_index`. `ngram_token_size` is global only.
 
+## Laravel Pulse and Telescope
+
+- Pulse: publish the package's migration (`php artisan vendor:publish --tag=matrixone-pulse-migrations`) instead of Pulse's; the MatrixOne storage is bound automatically.
+- Telescope works unchanged.
+
 ## Cache, queue and sessions
 
 `CACHE_STORE=database`, `QUEUE_CONNECTION=database` and `SESSION_DRIVER=database` work with the skeleton tables. There is no `SKIP LOCKED`: concurrent queue workers serialize when popping jobs, so prefer a few workers per queue (or Redis for high-throughput queues).
@@ -143,6 +150,9 @@ Useful variables: `ft_relevancy_algorithm` (`TF-IDF`/`BM25`, typos are accepted 
 | `panic runtime error: invalid memory address` on INSERT | Table with a foreign key **and** a FULLTEXT index | Separate the FULLTEXT table from foreign keys |
 | `Error reading result set's header`, then the next queries fail or a test hangs | `loadCount()` / `withCount()` (also `withSum()`-style aggregates using `count(*)`) on **one** parent selected by primary key (`find($id)`, `where('id', $id)`, `whereIn('id', [$id])`), when the related query has an extra condition such as SoftDeletes | Count separately for a single model: `$user->posts()->count()`. `withCount()` over several parents and `withExists()` are fine |
 | Wrong IDs from raw `LAST_INSERT_ID()` | Tables with a FULLTEXT index | Use `insertGetId()` / Eloquent (the driver uses `RETURNING`) |
+
+| **Silently wrong results** (`NULL` values) | A correlated scalar subquery with `limit`, e.g. `addSelect(['last' => Post::select('title')->whereColumn('user_id', 'users.id')->latest()->limit(1)])` | Use `hasOne(...)->latestOfMany()` / `ofMany()` relationships or aggregate subqueries (`max()`) |
+| `aggregate function sum, bad value [VARCHAR]` | `null as col` placeholders in a `UNION` | `cast(null as double) as col` |
 
 After a server panic the driver drops the broken connection (and forgets its transaction) so later queries reconnect instead of hanging.
 

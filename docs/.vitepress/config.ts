@@ -32,6 +32,7 @@ export default defineConfig({
           { text: 'Eloquent', link: '/docs/eloquent' },
           { text: 'Schema', link: '/docs/schema' },
           { text: 'Full-text Search', link: '/docs/full-text' },
+          { text: 'Integrations', link: '/docs/integrations' },
           { text: 'Testing', link: '/docs/testing' },
         ],
       },

@@ -2,6 +2,7 @@
 
 - [Creating indexes](#creating-indexes)
 - [Querying](#querying)
+- [Boolean queries](#boolean-queries)
 - [Relevance](#relevance)
 - [Session variables](#session-variables)
 - [FULLTEXT2 (experimental)](#fulltext2-experimental)
@@ -45,6 +46,61 @@ Article::whereFullText('meta', 'red')->get();   // JSON parser index
 ```
 
 The columns passed to `whereFullText()` must match the columns of one FULLTEXT index. The natural language and boolean modes are supported. Query expansion (`['expanded' => true]`) is not supported by MatrixOne and throws a `RuntimeException`.
+
+::: warning Natural language mode differs from MySQL
+MySQL's natural language mode matches documents containing **any** of the words and ranks them. MatrixOne's only matches documents where the words appear together: `whereFullText('body', 'python science')` does not match "Python data science". For search boxes use `FullTextQuery::anyOf($input)` (boolean mode without operators), which behaves like MySQL, or Scout with `SCOUT_DRIVER=matrixone`, which does this automatically.
+:::
+
+## Boolean queries
+
+`MatrixOne\Support\FullTextQuery` builds boolean-mode queries without writing operators by hand, and strips operator characters from user input:
+
+```php
+use MatrixOne\Support\FullTextQuery;
+
+// +machine +learning
+Article::whereFullTextQuery(['title', 'body'], FullTextQuery::make()->must('machine', 'learning'))->get();
+
+// +programming -legacy
+Article::whereFullTextQuery(['title', 'body'], FullTextQuery::make()->must('programming')->mustNot('legacy'))->get();
+
+// +python data science ~beginner   (data/science raise, beginner lowers the score)
+Article::searchFullText(['title', 'body'], FullTextQuery::make()->must('python')->encourage('data', 'science')->discourage('beginner'))->get();
+
+// "neural networks"   (exact phrase)
+Article::whereFullTextQuery(['title', 'body'], FullTextQuery::make()->phrase('neural networks'))->get();
+
+// +pyth*   (prefix)
+Article::whereFullTextQuery('title', FullTextQuery::make()->prefix('pyth'))->get();
+
+// Any of the words of a search box, ranked (MySQL natural-language behaviour)
+Article::searchFullText(['title', 'body'], FullTextQuery::anyOf($request->input('q')))->paginate();
+```
+
+| Method | Operator | Meaning |
+|--------|----------|---------|
+| `must(...$terms)` | `+term` | Required |
+| `mustNot(...$terms)` | `-term` | Excluded |
+| `encourage(...$terms)` | `term` | Optional, raises the score |
+| `discourage(...$terms)` | `~term` | Optional, lowers the score |
+| `phrase($words)` | `"words"` | Exact phrase |
+| `prefix($prefix, $required = true)` | `+prefix*` | Words starting with the prefix |
+| `FullTextQuery::anyOf($text)` | `w1 w2 ...` | Any of the words |
+
+`whereFullTextQuery()` and `searchFullText()` run the query in boolean mode; an empty query (e.g. input made only of operators) matches nothing.
+
+::: warning Phrases
+MatrixOne honours a phrase only when it is the whole query. Combined with other terms or operators (including a leading `+`), its words are matched individually.
+:::
+
+Use BM25 scoring for ranking-sensitive searches (`encourage()` / `discourage()` barely change TF-IDF scores):
+
+```php
+'matrixone' => [
+    // ...
+    'variables' => ['ft_relevancy_algorithm' => 'BM25'],
+],
+```
 
 ## Relevance
 
@@ -149,7 +205,9 @@ The package registers a Scout engine for MatrixOne. Use it instead of Scout's `d
 SCOUT_DRIVER=matrixone
 ```
 
-It behaves like Scout's database engine (`LIKE` columns, `#[SearchUsingPrefix]`, `#[SearchUsingFullText]`, `where`/`whereIn`, pagination, soft deletes) with three differences:
+It behaves like Scout's database engine (`LIKE` columns, `#[SearchUsingPrefix]`, `#[SearchUsingFullText]`, `where`/`whereIn`, pagination, soft deletes) with these differences:
+
+- The search term matches documents containing any of its words, ranked by relevance, like MySQL's natural language mode. Models declaring `#[SearchUsingFullText([...], ['mode' => 'boolean'])]` pass the term through unchanged, so users can type operators (`+python -legacy`).
 
 - Full-text matches are selected through a subquery. MatrixOne cannot combine `MATCH ... AGAINST` with the `LIKE` conditions by `OR`, so Scout's own `database` engine fails on models that mix full-text and `LIKE` columns (it works for `LIKE`-only models).
 - Results are ordered by full-text relevance, as Scout does on PostgreSQL.

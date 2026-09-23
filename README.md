@@ -107,6 +107,7 @@ The package ships [Laravel Boost](https://github.com/laravel/boost) resources, p
 | [Query Builder](docs/docs/query-builder.md) | Behaviour differences, JSON, full-text and vector queries |
 | [Eloquent](docs/docs/eloquent.md) | Models, the `AsVector` cast, transactions |
 | [Full-text Search](docs/docs/full-text.md) | Parsers, relevance, session variables, FULLTEXT2 |
+| [Integrations](docs/docs/integrations.md) | Laravel Scout, Pulse and Telescope |
 | [Schema](docs/docs/schema.md) | Column types, indexes, vector indexes, introspection |
 | [Testing](docs/docs/testing.md) | Laravel testing traits on MatrixOne |
 | [Compatibility](docs/docs/compatibility.md) | Every MatrixOne difference the driver handles or rejects |
@@ -127,7 +128,7 @@ Towards full parity with Laravel's MySQL and PostgreSQL drivers:
 - [ ] `schema:dump` through MatrixOne's `mo-dump`
 - [x] Verified reconnects after lost connections and server restarts
 - [x] Tests for UUID/ULID keys, time zones and microsecond timestamps
-- [ ] Verified integration with Scout's database engine, Pulse and Telescope
+- [x] Verified integration with Scout's database engine, Pulse and Telescope
 - [ ] Snapshot / time-travel helpers
 - [ ] Hybrid full-text + vector search helper
 - [ ] Bulk loading with `LOAD DATA`
