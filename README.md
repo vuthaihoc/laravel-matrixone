@@ -118,6 +118,23 @@ The package ships [Laravel Boost](https://github.com/laravel/boost) resources, p
 composer test
 ```
 
+## TODO
+
+Towards full parity with Laravel's MySQL and PostgreSQL drivers:
+
+- [ ] Case-insensitive string equality helpers (MatrixOne ignores `_ci` collations for `=` and unique indexes)
+- [ ] `php artisan db` support for the `matrixone` driver
+- [ ] `schema:dump` through MatrixOne's `mo-dump`
+- [ ] Verified reconnects after lost connections and server restarts
+- [ ] Tests for UUID/ULID keys, time zones and microsecond timestamps
+- [ ] Verified integration with Scout's database engine, Pulse and Telescope
+- [ ] Snapshot / time-travel helpers
+- [ ] Hybrid full-text + vector search helper
+- [ ] Bulk loading with `LOAD DATA`
+- [ ] Compatibility matrix across MatrixOne 4.2.x releases
+- [ ] Release `v1.0.0` on Packagist and publish the docs site
+- [ ] Benchmarks against MySQL
+
 ## Credits
 
 Based on [laravel-clickhouse](https://github.com/laravel-clickhouse/laravel-clickhouse).
