@@ -126,7 +126,7 @@ Towards full parity with Laravel's MySQL and PostgreSQL drivers:
 - [x] `php artisan db` support for the `matrixone` driver
 - [ ] `schema:dump` through MatrixOne's `mo-dump`
 - [x] Verified reconnects after lost connections and server restarts
-- [ ] Tests for UUID/ULID keys, time zones and microsecond timestamps
+- [x] Tests for UUID/ULID keys, time zones and microsecond timestamps
 - [ ] Verified integration with Scout's database engine, Pulse and Telescope
 - [ ] Snapshot / time-travel helpers
 - [ ] Hybrid full-text + vector search helper

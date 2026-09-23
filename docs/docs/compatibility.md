@@ -32,6 +32,11 @@ MatrixOne speaks the MySQL 8.0 protocol but implements a subset of MySQL. This p
 | Native `UUID` column type unreadable by mysqlnd | `uuid()` stays `char(36)` |
 | No `YEAR` type | `year()` becomes `smallint` |
 
+## Minor differences
+
+- Fractional-second columns: MatrixOne may omit a zero fraction when returning values (`2026-01-01 00:00:00` instead of `2026-01-01 00:00:00.000000`), e.g. for `datetime(6)`. Eloquent date casts parse both forms; compare raw strings with care.
+- As with Laravel's MySQL driver, `DateTime`/Carbon bindings are formatted as `Y-m-d H:i:s` (no microseconds). Pass a formatted string to compare fractional seconds.
+
 ## Not supported (throws)
 
 - Full-text query expansion (`whereFullText(..., ['expanded' => true])`)

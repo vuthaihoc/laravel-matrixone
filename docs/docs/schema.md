@@ -36,6 +36,8 @@
 
 `id()->from(1000)` sets the auto-increment start value when creating a table; MatrixOne cannot change it on an existing table.
 
+UUID and ULID keys (`uuid('id')->primary()`, `ulid()`, `foreignUuid()`, Eloquent's `HasUuids` / `HasUlids`) work as on MySQL. `timestamp` columns are stored in UTC and converted to the session time zone (the `timezone` connection option), `datetime` columns are not, and fractional seconds up to 6 digits are kept.
+
 ## Indexes
 
 `primary()`, `unique()`, `index()` and their `drop*` counterparts work. The index algorithm argument (`USING BTREE`, `GIN`...) is ignored because MatrixOne rejects it. `renameIndex()` is emulated by dropping and re-creating the index.
