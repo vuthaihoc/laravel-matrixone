@@ -7,8 +7,10 @@ use Illuminate\Database\Console\DbCommand as BaseDbCommand;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Schema\ColumnDefinition;
 use Illuminate\Support\ServiceProvider;
+use Laravel\Scout\EngineManager;
 use MatrixOne\Connectors\MatrixOneConnector;
 use MatrixOne\Console\DbCommand;
+use MatrixOne\Scout\MatrixOneEngine;
 
 class MatrixOneServiceProvider extends ServiceProvider
 {
@@ -29,6 +31,13 @@ class MatrixOneServiceProvider extends ServiceProvider
         });
 
         static::registerBlueprintMacros();
+
+        // SCOUT_DRIVER=matrixone, when Laravel Scout is installed.
+        if (class_exists(EngineManager::class)) {
+            $this->app->resolving(EngineManager::class, function (EngineManager $manager) {
+                $manager->extend('matrixone', fn () => new MatrixOneEngine);
+            });
+        }
 
         // `php artisan db` only knows Laravel's built-in drivers.
         $this->app->extend(BaseDbCommand::class, fn ($command, $app) => $app->make(DbCommand::class));
