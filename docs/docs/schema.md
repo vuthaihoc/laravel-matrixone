@@ -40,6 +40,16 @@
 
 `primary()`, `unique()`, `index()` and their `drop*` counterparts work. The index algorithm argument (`USING BTREE`, `GIN`...) is ignored because MatrixOne rejects it. `renameIndex()` is emulated by dropping and re-creating the index.
 
+### Differences from MySQL
+
+| Case | Behaviour |
+|------|-----------|
+| Unique index on a `_ci` column | **Case-sensitive**: `bob@example.com` and `BOB@example.com` are both accepted, while MySQL rejects the second. Normalize such values before writing them, e.g. with a mutator: `protected function email(): Attribute { return Attribute::set(fn ($v) => mb_strtolower($v)); }` |
+| Unique index on a nullable column | Several `NULL` values are allowed, as in MySQL. |
+| Index on a `TEXT` column | Rejected (MySQL requires a prefix length). Use a prefix index, `$table->rawIndex('body(100)', 'posts_body_prefix')`, or a FULLTEXT index. |
+| Functional / expression index (`rawIndex('(lower(name))')`, `((meta->>'$.kind'))`) | Rejected; MatrixOne only has a draft proposal for them. Add a regular column holding the computed value and index it. |
+| Spatial index | Not available (no spatial types). |
+
 Index names longer than MatrixOne's 64-character limit are shortened to a 56-character prefix plus a hash of the full name. The same shortening is applied by `dropIndex()`, `dropUnique()`, `renameIndex()` and `Schema::hasIndex()`, so Laravel's generated names keep working. `Schema::getIndexes()` reports the shortened name.
 
 ### JSON columns
@@ -58,11 +68,10 @@ Foreign keys (`foreignId()->constrained()`, `cascadeOnDelete()`, `dropForeign()`
 ```php
 $table->fullText('body');
 $table->fullText(['title', 'body'])->parser('ngram');
+$table->fullText('meta')->parser('json');   // JSON columns
 ```
 
-::: danger MatrixOne 4.2.4 bug
-Inserting into a table that has **both** a foreign key and a FULLTEXT index crashes the MatrixOne 4.2.4 query planner (`invalid memory address or nil pointer dereference`). Until this is fixed upstream, keep full-text indexes on tables without their own foreign keys (a table *referenced* by foreign keys is fine).
-:::
+See [Full-text Search](./full-text) for parsers, relevance, session variables, FULLTEXT2 and the MatrixOne 4.2.4 foreign-key crash.
 
 ## Vector columns and indexes
 

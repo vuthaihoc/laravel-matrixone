@@ -70,9 +70,10 @@ The `->` and `->>` operators also work in raw SQL; MatrixOne rewrites them to `j
 ```php
 DB::table('articles')->whereFullText('title', 'matrixone')->get();
 DB::table('articles')->whereFullText(['title', 'body'], '+fast -slow', ['mode' => 'boolean'])->get();
+DB::table('articles')->searchFullText(['title', 'body'], 'vector database')->get(); // ordered by relevance
 ```
 
-A full-text index is required, see [Schema](./schema#full-text-indexes).
+See [Full-text Search](./full-text) for relevance scores, session variables such as `ft_relevancy_algorithm`, and limitations.
 
 ## Vector search
 

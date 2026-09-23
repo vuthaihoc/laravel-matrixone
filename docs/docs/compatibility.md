@@ -32,6 +32,7 @@ MatrixOne speaks the MySQL 8.0 protocol but implements a subset of MySQL. This p
 
 ## Not supported (throws)
 
+- Full-text query expansion (`whereFullText(..., ['expanded' => true])`)
 - `set()`, `geometry()`, `geography()` columns
 - Generated columns (`virtualAs()`, `storedAs()`)
 - Default values on JSON columns (unless `ignore_json_defaults` is set)

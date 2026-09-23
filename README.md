@@ -98,6 +98,7 @@ Document::whereVectorSimilarTo('embedding', [0.1, 0.2, 0.25], minSimilarity: 0.8
 | [Docker](docs/docs/docker.md) | Standalone and S3-backed MatrixOne servers |
 | [Query Builder](docs/docs/query-builder.md) | Behaviour differences, JSON, full-text and vector queries |
 | [Eloquent](docs/docs/eloquent.md) | Models, the `AsVector` cast, transactions |
+| [Full-text Search](docs/docs/full-text.md) | Parsers, relevance, session variables, FULLTEXT2 |
 | [Schema](docs/docs/schema.md) | Column types, indexes, vector indexes, introspection |
 | [Testing](docs/docs/testing.md) | Laravel testing traits on MatrixOne |
 | [Compatibility](docs/docs/compatibility.md) | Every MatrixOne difference the driver handles or rejects |
