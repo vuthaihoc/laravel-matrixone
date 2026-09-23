@@ -82,6 +82,12 @@ docker run -d -p 6001:6001 --name matrixone matrixorigin/matrixone:4.2.4
 
 The default account is `root` with password `111`. See [Running MatrixOne with Docker](./docker) for a persistent standalone setup and for storing data on S3.
 
+## Lost connections and restarts
+
+Laravel's reconnect logic works unchanged: when MatrixOne closes a session ("MySQL server has gone away", e.g. after `KILL` or a server restart), the next query outside a transaction reconnects and is retried. Inside a transaction the query fails, as on MySQL, because the server already rolled the transaction back; the transaction level is reset and later queries reconnect. Session variables from the `variables` option are applied again on every reconnect. Long-running processes (queue workers, Octane) therefore survive a MatrixOne restart without special handling.
+
+If MatrixOne panics while executing a statement, the connection is left unusable; the driver drops it so the next query reconnects (see [Compatibility › Known MatrixOne issues](./compatibility#known-matrixone-issues)).
+
 ## Command line
 
 `php artisan db` opens the `mysql` client on a MatrixOne connection (MatrixOne speaks the MySQL protocol), so the `mysql` client must be installed:
