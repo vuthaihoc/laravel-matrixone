@@ -6,6 +6,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use MatrixOne\MatrixOneConnection;
+use MatrixOne\Support\FullTextQuery;
 use RuntimeException;
 
 class FullTextTest extends TestCase
@@ -63,6 +64,46 @@ class FullTextTest extends TestCase
 
         $this->assertSame(['MatrixOne database', 'Another database'], $rows->pluck('title')->all());
         $this->assertGreaterThan((float) $rows[1]->score, (float) $rows[0]->score);
+    }
+
+    public function testBooleanOperatorsWithFullTextQuery(): void
+    {
+        DB::table('ft_docs')->insert([
+            ['title' => 'Introduction to Machine Learning', 'body' => 'machine learning lets computers learn from data without explicit programming'],
+            ['title' => 'Python Programming Best Practices', 'body' => 'python is a versatile programming language'],
+            ['title' => 'Deep Learning with Neural Networks', 'body' => 'deep learning uses neural networks'],
+            ['title' => 'Legacy Code Maintenance', 'body' => 'refactoring legacy programming code'],
+        ]);
+
+        $titles = fn (FullTextQuery $query) => DB::table('ft_docs')->whereFullTextQuery(['title', 'body'], $query)->orderBy('title')->pluck('title')->all();
+
+        $this->assertSame(['Introduction to Machine Learning'], $titles(FullTextQuery::make()->must('machine', 'learning')));
+        $this->assertSame(
+            ['Introduction to Machine Learning', 'Python Programming Best Practices'],
+            $titles(FullTextQuery::make()->must('programming')->mustNot('legacy'))
+        );
+        $this->assertSame(['Deep Learning with Neural Networks'], $titles(FullTextQuery::make()->phrase('neural networks')));
+        $this->assertSame([], $titles(FullTextQuery::make()->phrase('networks neural')));
+        $this->assertSame(['Python Programming Best Practices'], $titles(FullTextQuery::make()->prefix('pyth')));
+
+        // With BM25, discouraged terms push matches to the end.
+        $ranked = $this->connection()->withSessionVariables(['ft_relevancy_algorithm' => 'BM25'], fn () => DB::table('ft_docs')
+            ->searchFullText(['title', 'body'], FullTextQuery::make()->must('programming')->discourage('legacy'))
+            ->pluck('title')
+            ->all());
+
+        $this->assertSame('Legacy Code Maintenance', end($ranked));
+    }
+
+    public function testNaturalLanguageModeOnlyMatchesWordsTogether(): void
+    {
+        // MatrixOne's natural language mode (unlike MySQL's) does not match
+        // documents containing only some of the words; anyOf() does.
+        $this->assertSame([], DB::table('ft_docs')->whereFullText(['title', 'body'], 'matrixone search')->pluck('title')->all());
+        $this->assertSame(
+            ['Another database', 'MatrixOne database'],
+            DB::table('ft_docs')->whereFullTextQuery(['title', 'body'], FullTextQuery::anyOf('matrixone search'))->orderBy('title')->pluck('title')->all()
+        );
     }
 
     public function testQueryExpansionFailsClearly(): void

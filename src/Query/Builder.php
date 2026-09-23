@@ -11,6 +11,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Support\Stringable;
 use InvalidArgumentException;
 use MatrixOne\MatrixOneConnection;
+use MatrixOne\Support\FullTextQuery;
 use MatrixOne\Support\Vector;
 
 /**
@@ -264,13 +265,35 @@ class Builder extends BaseBuilder
     /**
      * Search a FULLTEXT index and order the matches by relevance.
      *
+     * A FullTextQuery runs in boolean mode.
+     *
      * @param  string|string[]  $columns
      * @param  array{mode?: 'natural'|'boolean'}  $options
      * @return $this
      */
-    public function searchFullText(string|array $columns, string $value, array $options = []): static
+    public function searchFullText(string|array $columns, string|FullTextQuery $value, array $options = []): static
     {
+        if ($value instanceof FullTextQuery) {
+            [$value, $options] = [$value->toString(), ['mode' => 'boolean']];
+        }
+
         return $this->whereFullText($columns, $value, $options)->orderByFullTextRelevance($columns, $value, $options);
+    }
+
+    /**
+     * Add a boolean-mode full-text "where" clause built with FullTextQuery.
+     * An empty query matches nothing.
+     *
+     * @param  string|string[]  $columns
+     * @return $this
+     */
+    public function whereFullTextQuery(string|array $columns, FullTextQuery $query, string $boolean = 'and'): static
+    {
+        if ($query->isEmpty()) {
+            return $this->whereRaw('0 = 1', [], $boolean);
+        }
+
+        return $this->whereFullText($columns, $query->toString(), ['mode' => 'boolean'], $boolean);
     }
 
     /**

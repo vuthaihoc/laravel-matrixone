@@ -73,6 +73,18 @@ class ScoutPlainArticle extends ScoutArticle
     }
 }
 
+class ScoutBooleanArticle extends ScoutArticle
+{
+    /**
+     * @return array<string, mixed>
+     */
+    #[SearchUsingFullText(['title', 'body'], ['mode' => 'boolean'])]
+    public function toSearchableArray(): array
+    {
+        return ['title' => $this->title, 'body' => $this->body];
+    }
+}
+
 /**
  * The MatrixOne Scout engine with deterministic query embeddings.
  */
@@ -161,6 +173,20 @@ class ScoutTest extends TestCase
     {
         // "database" appears twice in DB-100 and once in DB-300.
         $this->assertSame(['DB-100', 'DB-300'], ScoutArticle::search('database')->get()->pluck('sku')->all());
+    }
+
+    public function testMultiWordSearchesMatchAnyWord(): void
+    {
+        // Like MySQL's natural language mode: any of the words, by relevance.
+        $this->assertSame(['MU-200'], ScoutArticle::search('guitar chords')->get()->pluck('sku')->all());
+        $this->assertEqualsCanonicalizing(['MU-200', 'DB-300', 'DB-100'], ScoutArticle::search('songs database')->get()->pluck('sku')->all());
+        $this->assertSame([], ScoutArticle::search('+++')->get()->pluck('sku')->all());
+    }
+
+    public function testBooleanModeModelsKeepOperators(): void
+    {
+        $this->assertSame(['MU-200'], ScoutBooleanArticle::search('+songs -database')->get()->pluck('sku')->all());
+        $this->assertSame(['DB-300'], ScoutBooleanArticle::search('+songs +database')->get()->pluck('sku')->all());
     }
 
     public function testTheBuiltInDatabaseEngineWorksWithoutFullTextColumns(): void

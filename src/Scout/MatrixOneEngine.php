@@ -8,12 +8,17 @@ use Laravel\Scout\Builder;
 use Laravel\Scout\Engines\DatabaseEngine;
 use MatrixOne\MatrixOneConnection;
 use MatrixOne\Query\Builder as QueryBuilder;
+use MatrixOne\Support\FullTextQuery;
 
 /**
  * Scout's database engine tuned for MatrixOne (SCOUT_DRIVER=matrixone).
  *
  * - Full-text matches are ordered by relevance: unlike MySQL, MatrixOne does
  *   not sort MATCH ... AGAINST results on its own.
+ * - Search terms match any of their words, like MySQL's natural language
+ *   mode (MatrixOne's natural language mode only matches words appearing
+ *   together); models declaring ['mode' => 'boolean'] keep the raw query
+ *   with its operators.
  * - Semantic search (->semantic()) and hybrid search (->hybrid()), which
  *   Scout enables for PostgreSQL only, run on MatrixOne vector columns.
  */
@@ -87,7 +92,7 @@ class MatrixOneEngine extends DatabaseEngine
                 );
             }
 
-            if ($fullTextColumns !== []) {
+            if ($fullTextColumns !== [] && $this->fullTextTerm($builder) !== '') {
                 $query->orWhereIn(
                     $model->getQualifiedKeyName(),
                     $this->fullTextMatches($builder, $fullTextColumns)->select($model->getKeyName())
@@ -105,7 +110,8 @@ class MatrixOneEngine extends DatabaseEngine
     {
         return $builder->model->getConnection() instanceof MatrixOneConnection
             && count($this->getFullTextColumns($builder)) > 0
-            && empty($builder->orders);
+            && empty($builder->orders)
+            && $this->fullTextTerm($builder) !== '';
     }
 
     /**
@@ -128,9 +134,9 @@ class MatrixOneEngine extends DatabaseEngine
             ->select($model->getKeyName())
             ->selectFullTextRelevance(
                 array_map(fn ($column) => $model->qualifyColumn($column), $fullTextColumns),
-                (string) $builder->query,
+                $this->fullTextTerm($builder),
                 'scout_relevance',
-                $this->matrixOneFullTextOptions($builder)
+                ['mode' => 'boolean']
             );
 
         $query->getQuery()->columns ??= [$model->getTable().'.*'];
@@ -156,19 +162,25 @@ class MatrixOneEngine extends DatabaseEngine
 
         return $matches->whereFullText(
             array_map(fn ($column) => $model->qualifyColumn($column), $fullTextColumns),
-            (string) $builder->query,
-            $this->matrixOneFullTextOptions($builder)
+            $this->fullTextTerm($builder),
+            ['mode' => 'boolean']
         );
     }
 
     /**
-     * The full-text options MatrixOne understands (natural language or boolean mode).
+     * The boolean-mode full-text query for the search term: the raw term for
+     * models declaring ['mode' => 'boolean'], otherwise any of its words.
      *
      * @param  Builder<Model>  $builder
-     * @return array{mode?: 'boolean'}
      */
-    protected function matrixOneFullTextOptions(Builder $builder): array
+    protected function fullTextTerm(Builder $builder): string
     {
-        return ($this->getFullTextOptions($builder)['mode'] ?? null) === 'boolean' ? ['mode' => 'boolean'] : [];
+        $term = (string) $builder->query;
+
+        if (($this->getFullTextOptions($builder)['mode'] ?? null) === 'boolean') {
+            return trim($term);
+        }
+
+        return FullTextQuery::anyOf($term)->toString();
     }
 }
