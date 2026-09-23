@@ -122,7 +122,7 @@ composer test
 
 Towards full parity with Laravel's MySQL and PostgreSQL drivers:
 
-- [ ] Case-insensitive string equality helpers (MatrixOne ignores `_ci` collations for `=` and unique indexes)
+- [x] Case-insensitive string equality helpers (MatrixOne ignores `_ci` collations for `=` and unique indexes)
 - [ ] `php artisan db` support for the `matrixone` driver
 - [ ] `schema:dump` through MatrixOne's `mo-dump`
 - [ ] Verified reconnects after lost connections and server restarts

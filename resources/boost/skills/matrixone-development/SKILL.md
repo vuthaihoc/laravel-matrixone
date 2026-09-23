@@ -43,7 +43,7 @@ The database must exist before migrating (`create database laravel;`).
 | CJK / partial words | `->parser('ngram')` | Default parser for Chinese/Japanese |
 | JSON default | Model `$attributes = ['meta' => '{}']` | `->default('{}')` on JSON (throws) |
 | Query by a JSON field | Copy the field into a regular indexed column | Index on JSON or expression index (rejected) |
-| Unique e-mail / username | Lower-case in a mutator, unique index on the normalized value | Relying on `_ci` collation (ignored) |
+| Unique e-mail / username | `Lowercase` cast + unique index on the normalized value | Relying on `_ci` collation (ignored) |
 | UUID keys | `$table->uuid()` (stored as `char(36)`) | Native `uuid` column type (unreadable by PHP's mysqlnd) |
 | Year | `$table->year()` (becomes `smallint`) | |
 | Embeddings | `$table->vector('embedding', 1536)` + `$table->vectorIndex('embedding')->lists(100)` (IVF-Flat) | Vector column in a primary/unique key; `->hnsw()` on tables using `id()` (HNSW needs a signed BIGINT key and syncs asynchronously) |
@@ -74,7 +74,7 @@ Enforce the relationship in application code (validation, `exists` rule, observe
 
 ## Queries
 
-- `where('email', $value)` is case-sensitive: normalize the input (`Str::lower()`) or use `whereLike()` (compiled to `ILIKE`).
+- `where('email', $value)` is case-sensitive. Prefer storing normalized values with the `MatrixOne\Eloquent\Casts\Lowercase` cast and querying `where('email', Str::lower($value))` (uses the index; also lower-case credentials before `Auth::attempt()`). Otherwise use `whereIgnoreCase()` / `whereInIgnoreCase()` (table scan).
 - `like` / `whereLike()` are case-insensitive (ILIKE); `whereLike(..., caseSensitive: true)` or the `like binary` operator for exact case.
 - All Laravel JSON methods work: `where('meta->a', ...)`, `whereJsonContains()`, `whereJsonOverlaps()`, `whereJsonLength()`, `whereJsonContainsKey()`, `update(['meta->a' => ...])`. `pluck('meta->a')` needs an alias: `pluck('meta->a as a')`.
 - `upsert()`, `insertOrIgnore()`, `updateOrCreate()`, `createOrFirst()` work.

@@ -100,6 +100,67 @@ class Builder extends BaseBuilder
     }
 
     /**
+     * Add a case-insensitive equality "where" clause.
+     *
+     * MatrixOne compares strings case-sensitively even on `_ci` collations.
+     * This compiles to `lower(column) = lower(?)`, which cannot use an index;
+     * for large tables store normalized values instead (see the Lowercase
+     * cast) and compare with a plain where().
+     *
+     * @return $this
+     */
+    public function whereIgnoreCase(ExpressionContract|string $column, ?string $value, string $boolean = 'and'): static
+    {
+        if ($value === null) {
+            return $this->whereNull($column, $boolean);
+        }
+
+        return $this->whereRaw('lower('.$this->grammar->wrap($column).') = lower(?)', [$value], $boolean);
+    }
+
+    /**
+     * Add a case-insensitive equality "or where" clause.
+     *
+     * @return $this
+     */
+    public function orWhereIgnoreCase(ExpressionContract|string $column, ?string $value): static
+    {
+        return $this->whereIgnoreCase($column, $value, 'or');
+    }
+
+    /**
+     * Add a case-insensitive "where in" clause.
+     *
+     * @param  array<int, string>  $values
+     * @return $this
+     */
+    public function whereInIgnoreCase(ExpressionContract|string $column, array $values, string $boolean = 'and', bool $not = false): static
+    {
+        if ($values === []) {
+            return $not ? $this : $this->whereRaw('0 = 1', [], $boolean);
+        }
+
+        $placeholders = implode(', ', array_fill(0, count($values), 'lower(?)'));
+
+        return $this->whereRaw(
+            'lower('.$this->grammar->wrap($column).')'.($not ? ' not in ' : ' in ').'('.$placeholders.')',
+            array_values($values),
+            $boolean
+        );
+    }
+
+    /**
+     * Add a case-insensitive "where not in" clause.
+     *
+     * @param  array<int, string>  $values
+     * @return $this
+     */
+    public function whereNotInIgnoreCase(ExpressionContract|string $column, array $values, string $boolean = 'and'): static
+    {
+        return $this->whereInIgnoreCase($column, $values, $boolean, true);
+    }
+
+    /**
      * Add the full-text relevance score to the select list.
      *
      * The columns must match a FULLTEXT index. MatrixOne scores with TF-IDF by

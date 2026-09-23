@@ -52,7 +52,7 @@ composer test:known-issues
 ```
 
 - **4.2.4 panic on correlated counts.** `loadCount()` / `withCount()` on a single parent selected by primary key (`find($id)`, `whereIn('id', [$id])`) crashes the server when the related query has an extra condition, e.g. SoftDeletes (`Error reading result set's header`). Count on the relation instead: `$user->posts()->count()`. The driver drops the broken connection, forgetting its transaction, so later queries reconnect instead of blocking on the row locks the dead session still holds.
-- `=` compares strings case-sensitively even on `_ci` collations; the driver cannot change this without losing index use.
+- `=` compares strings case-sensitively even on `_ci` collations; the driver cannot change this without losing index use. Use the `Lowercase` cast or `whereIgnoreCase()` ([Query Builder › Case-insensitive equality](./query-builder#case-insensitive-equality)).
 - **4.2.4:** inserting into a table with both a foreign key and a FULLTEXT index panics in the query planner. Keep full-text indexes on tables without their own foreign keys.
 - **FULLTEXT2** indexes (4.2.2+) are experimental and are not indexed synchronously; the driver does not use them.
 - **HNSW** vector indexes are experimental: they need a signed `BIGINT` primary key and are maintained asynchronously (sync with `alter reindex ... hnsw force_sync`). `vectorIndex()` builds IVF-Flat unless `->hnsw()` is called.

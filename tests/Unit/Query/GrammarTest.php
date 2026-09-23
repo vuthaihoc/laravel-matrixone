@@ -53,6 +53,24 @@ class GrammarTest extends TestCase
         );
     }
 
+    public function testIgnoreCaseHelpers(): void
+    {
+        $query = $this->query()->from('users')
+            ->whereIgnoreCase('email', 'A@X.com')
+            ->orWhereIgnoreCase('name', 'Bob')
+            ->whereInIgnoreCase('role', ['Admin', 'Owner'])
+            ->whereNotInIgnoreCase('status', ['Banned'])
+            ->whereIgnoreCase('deleted_by', null);
+
+        $this->assertSame(
+            'select * from `users` where lower(`email`) = lower(?) or lower(`name`) = lower(?) and lower(`role`) in (lower(?), lower(?)) '
+            .'and lower(`status`) not in (lower(?)) and `deleted_by` is null',
+            $query->toSql()
+        );
+        $this->assertSame(['A@X.com', 'Bob', 'Admin', 'Owner', 'Banned'], $query->getBindings());
+        $this->assertSame('select * from `users` where 0 = 1', $this->query()->from('users')->whereInIgnoreCase('role', [])->toSql());
+    }
+
     public function testSharedLockIsPromotedToForUpdate(): void
     {
         $this->assertSame('select * from `users` for update', $this->query()->from('users')->sharedLock()->toSql());

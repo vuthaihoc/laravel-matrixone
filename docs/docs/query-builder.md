@@ -37,9 +37,46 @@ MatrixOne ignores case-insensitive collations such as `utf8mb4_unicode_ci`: both
 | `where('name', 'not like', 'a%')`, `whereNotLike(...)` | `name not ilike ?` |
 | `whereLike('name', 'A%', caseSensitive: true)`, `where('name', 'like binary', ...)` | `name like binary ?` |
 
-::: warning Equality is case-sensitive
-`where('email', 'Alice@example.com')` does **not** match `alice@example.com` on MatrixOne, while it does on MySQL with a `_ci` collation. The driver does not rewrite `=` because wrapping columns in `lower()` would prevent index use. Normalize such values when writing them (for example lower-case e-mails in a mutator) or compare with `whereLike()`.
-:::
+### Case-insensitive equality
+
+`where('email', 'Alice@example.com')` does **not** match `alice@example.com` on MatrixOne, while it does on MySQL with a `_ci` collation, and unique indexes accept values that differ only by case. The driver does not rewrite `=` because wrapping columns in `lower()` prevents index use. Two tools cover the gap:
+
+**Normalize on write (recommended for e-mails, usernames, slugs).** The `Lowercase` cast stores values in lower case, so unique indexes behave like MySQL's and lookups keep using the index:
+
+```php
+use MatrixOne\Eloquent\Casts\Lowercase;
+
+class User extends Authenticatable
+{
+    protected function casts(): array
+    {
+        return ['email' => Lowercase::class];
+    }
+}
+
+User::where('email', Str::lower($request->email))->first();
+```
+
+Lower-case the credentials before authenticating as well, since `Auth::attempt()` compares with `=`:
+
+```php
+// app/Http/Requests/Auth/LoginRequest.php (Breeze) or a Fortify action
+protected function prepareForValidation(): void
+{
+    $this->merge(['email' => Str::lower((string) $this->email)]);
+}
+```
+
+Existing rows can be normalized once: `User::query()->update(['email' => DB::raw('lower(email)')]);` (check for duplicates first).
+
+**Compare case-insensitively at query time** when the stored data is not normalized. These helpers compile to `lower(column) = lower(?)`, which scans the table:
+
+```php
+User::whereIgnoreCase('email', $email)->first();
+User::whereIgnoreCase('email', $a)->orWhereIgnoreCase('email', $b)->get();
+User::whereInIgnoreCase('role', ['Admin', 'Owner'])->get();
+User::whereNotInIgnoreCase('status', ['Banned'])->get();
+```
 
 ## JSON columns
 

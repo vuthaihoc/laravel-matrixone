@@ -44,7 +44,7 @@
 
 | Case | Behaviour |
 |------|-----------|
-| Unique index on a `_ci` column | **Case-sensitive**: `bob@example.com` and `BOB@example.com` are both accepted, while MySQL rejects the second. Normalize such values before writing them, e.g. with a mutator: `protected function email(): Attribute { return Attribute::set(fn ($v) => mb_strtolower($v)); }` |
+| Unique index on a `_ci` column | **Case-sensitive**: `bob@example.com` and `BOB@example.com` are both accepted, while MySQL rejects the second. Normalize such values with the `MatrixOne\Eloquent\Casts\Lowercase` cast, see [Query Builder › Case-insensitive equality](./query-builder#case-insensitive-equality). |
 | Unique index on a nullable column | Several `NULL` values are allowed, as in MySQL. |
 | Index on a `TEXT` column | Rejected (MySQL requires a prefix length). Use a prefix index, `$table->rawIndex('body(100)', 'posts_body_prefix')`, or a FULLTEXT index. |
 | Functional / expression index (`rawIndex('(lower(name))')`, `((meta->>'$.kind'))`) | Rejected; MatrixOne only has a draft proposal for them. Add a regular column holding the computed value and index it. |
