@@ -325,6 +325,20 @@ class SchemaTest extends TestCase
         $this->assertSame(['primary'], collect(Schema::getIndexes($table))->pluck('name')->all());
     }
 
+    public function testUniqueIndexesAreCaseSensitive(): void
+    {
+        // Documented difference from MySQL's _ci collations: MatrixOne treats
+        // values differing only by case as distinct.
+        Schema::create('sc_emails', function (Blueprint $table) {
+            $table->id();
+            $table->string('email')->unique();
+        });
+
+        DB::table('sc_emails')->insert([['email' => 'bob@example.com'], ['email' => 'BOB@example.com']]);
+
+        $this->assertSame(2, DB::table('sc_emails')->count());
+    }
+
     public function testUnsupportedColumnTypesThrowBeforeTouchingTheDatabase(): void
     {
         $this->expectException(RuntimeException::class);
