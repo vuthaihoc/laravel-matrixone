@@ -1,0 +1,12 @@
+# Paths are relative to the container's working directory ("/").
+logservices = [
+    "/mo_confs/log.toml",
+]
+
+tnservices = [
+    "/mo_confs/tn.toml",
+]
+
+cnservices = [
+    "/mo_confs/cn.toml",
+]

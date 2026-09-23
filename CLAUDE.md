@@ -1,0 +1,51 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+A Laravel database driver for MatrixOne (MySQL wire protocol, default port 6001). It registers the `matrixone` driver and builds on Laravel's MySQL connection, connector and grammars, overriding only where MatrixOne differs. Supports PHP 8.2+, Laravel 12 and 13, MatrixOne 4.2+.
+
+## Development Commands
+
+- `composer test` — PHPUnit (unit + feature). Feature tests need MatrixOne on 127.0.0.1:6001 (`cd docker/standalone && docker compose up -d`). Docker setups for a standalone and an S3-backed server live in `docker/`, documented in `docs/docs/docker.md`.
+- `composer test:unit` / `composer test:feature`
+- `vendor/bin/phpunit --filter TestName` — a single test
+- `composer phpstan` — PHPStan level 9
+- `composer cs` / `composer cs:fix` — Laravel Pint
+- `cd docs && npx vitepress build` (or `bun run build`) — documentation site
+
+Local runs may use a gitignored `phpunit.xml` (copied from `phpunit.xml.dist`) to override the `MATRIXONE_*` env vars. Feature tests create the `laravel_matrixone_test` database automatically.
+
+## Architecture
+
+- `src/MatrixOneServiceProvider.php` — binds `db.connector.matrixone` and `Connection::resolverFor('matrixone')`, so Laravel's ConnectionFactory builds the connection like a built-in driver.
+- `src/MatrixOneConnection.php` — extends `MySqlConnection`: grammars, processor, unique-violation detection, `getMatrixOneVersion()`.
+- `src/Connectors/MatrixOneConnector.php` — extends `MySqlConnector`; emulated prepares on by default (`emulate_prepares` option).
+- `src/Query/Grammar.php` — MySQL grammar overrides (exists, upsert, locks, RAND, savepoints off, JSON, DELETE safeguard, vector distance).
+- `src/Query/Builder.php` — truncate fallback, vector helpers (`nearestTo`, `*VectorDistanceUsing`) and overrides of Laravel's vector methods.
+- `src/Query/Processors/MatrixOneProcessor.php` — normalizes column/index metadata.
+- `src/Schema/Grammar.php`, `Builder.php`, `Blueprint.php` — DDL and introspection overrides, vector columns and indexes.
+- `src/Eloquent/Casts/AsVector.php`, `src/Support/Vector.php` — vector literal conversion.
+
+`docs/docs/compatibility.md` lists every MatrixOne difference the driver handles; keep it in sync when adding an override, and prove each override with a feature test against a real server.
+
+## MatrixOne pitfalls
+
+- Boolean expressions return the strings `"true"`/`"false"`; `(bool) "false"` is true in PHP. Any grammar query whose result is cast to bool must return an integer (`if(expr, 1, 0)`).
+- No savepoints; nested transactions are flattened.
+- An unconditional `DELETE` with `foreign_key_checks = 0` corrupts FK metadata — keep the `where 1 = 1` safeguard.
+- 4.2.4: inserting into a table with both a foreign key and a FULLTEXT index panics.
+
+## Code Comments Language
+
+- All code (`src/`, `tests/`) — comments and docblocks MUST be in English.
+- Public docs (`docs/`, `README.md`) — English.
+
+## Release Checklist
+
+1. `composer cs`, `composer phpstan` and `composer test` pass with zero errors (MatrixOne running locally).
+2. `composer.json`, `LICENSE` and `README.md` are accurate; no placeholder text or broken links.
+3. `cd docs && npx vitepress build` succeeds; `docs/.vitepress/config.ts` base matches the GitHub Pages path (`/laravel-matrixone/`).
+4. Working tree clean and pushed.
+5. `git tag vX.Y.Z && git push origin vX.Y.Z` — `.github/workflows/release.yml` creates the GitHub release.

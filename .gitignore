@@ -1,0 +1,14 @@
+/.phpunit.cache
+/vendor
+.phpunit.result.cache
+/.idea
+/.vscode
+/.cache
+composer.lock
+.DS_Store
+phpunit.xml
+/docs/node_modules
+/docs/.vitepress/dist
+/docs/.vitepress/cache
+/CLAUDE.local.md
+/node_modules

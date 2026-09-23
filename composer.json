@@ -1,0 +1,67 @@
+{
+  "name": "vuthaihoc/laravel-matrixone",
+  "description": "A MatrixOne database driver for Laravel: Eloquent, Query Builder, Schema Builder and migrations on top of the MySQL protocol",
+  "keywords": [
+    "php",
+    "laravel",
+    "eloquent",
+    "matrixone",
+    "mysql",
+    "database",
+    "vector",
+    "htap"
+  ],
+  "homepage": "https://github.com/vuthaihoc/laravel-matrixone",
+  "authors": [
+    {
+      "name": "vuthaihoc",
+      "email": "vuthaihoc.ttud@gmail.com"
+    }
+  ],
+  "license": "MIT",
+  "require": {
+    "php": "^8.2",
+    "ext-pdo": "*",
+    "ext-pdo_mysql": "*",
+    "illuminate/database": "^12.0 || ^13.0",
+    "illuminate/support": "^12.0 || ^13.0"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^11.3",
+    "mockery/mockery": "^1.6",
+    "phpstan/phpstan": "^1.12",
+    "laravel/pint": "^1.17",
+    "orchestra/testbench": "^10.0 || ^11.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "MatrixOne\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "MatrixOne\\Tests\\Unit\\": "tests/Unit/",
+      "MatrixOne\\Tests\\Feature\\": "tests/Feature/"
+    }
+  },
+  "extra": {
+    "laravel": {
+      "providers": [
+        "MatrixOne\\MatrixOneServiceProvider"
+      ]
+    }
+  },
+  "scripts": {
+    "test": "phpunit --colors",
+    "test:unit": "phpunit --colors --testsuite=Unit",
+    "test:feature": "phpunit --colors --testsuite=Feature",
+    "phpstan": "phpstan analyse --memory-limit=-1",
+    "cs": "pint src tests --test",
+    "cs:fix": "pint src tests"
+  },
+  "config": {
+    "sort-packages": true
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true
+}

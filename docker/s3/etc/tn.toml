@@ -1,0 +1,60 @@
+service-type = "TN"
+data-dir = "/mo-data"
+
+[log]
+level = "info"
+
+[tn]
+uuid = "dd4dccb4-4d3c-41f8-b482-5251dc7a41bf"
+port-base = 19000
+
+[malloc]
+check-fraction = 65536
+enable-metrics = true
+
+[observability]
+disableMetric = false
+enable-metric-to-prom = true
+status-port = 7001
+
+# LOCAL: temporary files, one directory per service.
+[[fileservice]]
+name = "LOCAL"
+backend = "DISK"
+data-dir = "/mo-data/local/tn"
+
+# SHARED: MatrixOne table data, stored on S3.
+# backend = "MINIO" for MinIO, "S3" for AWS S3 and other S3-compatible
+# services (Tencent COS, Alibaba OSS...).
+[[fileservice]]
+name = "SHARED"
+backend = "MINIO"
+
+[fileservice.cache]
+memory-capacity = "1GiB"
+disk-capacity = "10GiB"
+disk-path = "/mo-cache/tn"
+
+[fileservice.s3]
+endpoint = "https://minio.example.com"
+bucket = "matrixone"
+key-prefix = "mo/data"
+region = "us-east-1"
+key-id = "YOUR_ACCESS_KEY"
+key-secret = "YOUR_SECRET_KEY"
+
+# ETL: observability data, same bucket with another prefix.
+[[fileservice]]
+name = "ETL"
+backend = "MINIO"
+
+[fileservice.cache]
+memory-capacity = "1B"
+
+[fileservice.s3]
+endpoint = "https://minio.example.com"
+bucket = "matrixone"
+key-prefix = "mo/etl"
+region = "us-east-1"
+key-id = "YOUR_ACCESS_KEY"
+key-secret = "YOUR_SECRET_KEY"

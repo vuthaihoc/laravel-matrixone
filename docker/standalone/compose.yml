@@ -1,0 +1,19 @@
+# Standalone MatrixOne: every service in one container, data on local disk.
+#   docker compose up -d
+#   mysql -h 127.0.0.1 -P 6001 -u root -p111
+services:
+  matrixone:
+    image: matrixorigin/matrixone:${MATRIXONE_TAG:-4.2.4}
+    container_name: matrixone
+    # The log service stores its data under a directory named after the
+    # hostname. Keep it fixed, or a re-created container fails to start
+    # with "shard not bootstrapped".
+    hostname: matrixone
+    ports:
+      - "6001:6001"
+    volumes:
+      # The image stores everything under /mo-data (log service WAL,
+      # transaction data, table files). Mount it to keep data across
+      # container re-creation.
+      - ./mo-data:/mo-data
+    restart: unless-stopped

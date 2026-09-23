@@ -1,0 +1,15 @@
+parameters:
+  level: 9
+  paths:
+    - src
+  reportUnmatchedIgnoredErrors: false
+  ignoreErrors:
+    # Dynamic SQL vs Laravel 13's literal-string typing on Expression / whereRaw.
+    - '#Illuminate\\Database\\Query\\Expression constructor expects TValue#'
+    - '#whereRaw\(\) expects .*literal-string#'
+    # Laravel's schema Fluent commands and columns expose their attributes magically.
+    - '#Access to an undefined property Illuminate\\Support\\Fluent(<string, mixed>)?::\$\w+\.#'
+    - '#Access to an undefined property Illuminate\\Database\\Schema\\ColumnDefinition::\$\w+\.#'
+    # Laravel's grammar method signatures use the untyped Fluent generic.
+    - '#with generic class Illuminate\\Support\\Fluent but does not specify its types#'
+  treatPhpDocTypesAsCertain: false

@@ -1,0 +1,94 @@
+# Schema
+
+- [Migrations](#migrations)
+- [Column types](#column-types)
+- [Indexes](#indexes)
+- [Full-text indexes](#full-text-indexes)
+- [Vector columns and indexes](#vector-columns-and-indexes)
+- [Altering tables](#altering-tables)
+- [Introspection](#introspection)
+
+## Migrations
+
+`php artisan migrate`, `migrate:rollback`, `migrate:fresh`, `migrate:status`, `db:wipe`, `db:show` and `db:table` work with the standard migration repository. The default Laravel migrations (`users`, `cache`, `jobs`, `sessions`...) run unchanged.
+
+`schema:dump` is not supported.
+
+## Column types
+
+| Blueprint method | MatrixOne type | Notes |
+|------------------|----------------|-------|
+| `id()`, `increments()`, integer types | `bigint`, `int`... | `unsigned` supported |
+| `string()`, `char()`, `text()` variants | `varchar`, `char`, `text` | |
+| `decimal()`, `float()`, `double()` | same | |
+| `boolean()` | `tinyint(1)` | |
+| `enum()` | `enum` | |
+| `json()`, `jsonb()` | `json` | |
+| `date()`, `dateTime()`, `time()`, `timestamp()` | same | precision, `useCurrent()`, `useCurrentOnUpdate()` supported |
+| `year()` | `smallint` | MatrixOne has no `YEAR` type |
+| `uuid()`, `ulid()` | `char(36)`, `char(26)` | MatrixOne's native `UUID` type is not readable by PHP's mysqlnd |
+| `binary()`, `ipAddress()`, `macAddress()` | same as MySQL | |
+| `vector($column, $dims)` | `vecf32(dims)` | dimensions are required |
+| `vector64($column, $dims)` | `vecf64(dims)` | MatrixOne blueprint only |
+| `set()` | ✗ | throws |
+| `geometry()`, `geography()` | ✗ | throws |
+| `virtualAs()`, `storedAs()` | ✗ | generated columns throw |
+
+`id()->from(1000)` sets the auto-increment start value when creating a table; MatrixOne cannot change it on an existing table.
+
+## Indexes
+
+`primary()`, `unique()`, `index()` and their `drop*` counterparts work. The index algorithm argument (`USING BTREE`) is ignored because MatrixOne rejects it. `renameIndex()` is emulated by dropping and re-creating the index.
+
+Foreign keys (`foreignId()->constrained()`, `cascadeOnDelete()`, `dropForeign()`) are supported, and `Schema::disableForeignKeyConstraints()` works.
+
+## Full-text indexes
+
+```php
+$table->fullText('body');
+$table->fullText(['title', 'body'])->parser('ngram');
+```
+
+::: danger MatrixOne 4.2.4 bug
+Inserting into a table that has **both** a foreign key and a FULLTEXT index crashes the MatrixOne 4.2.4 query planner (`invalid memory address or nil pointer dereference`). Until this is fixed upstream, keep full-text indexes on tables without their own foreign keys (a table *referenced* by foreign keys is fine).
+:::
+
+## Vector columns and indexes
+
+The schema blueprint passed to your migration callbacks is `MatrixOne\Schema\Blueprint`:
+
+```php
+use MatrixOne\Schema\Blueprint;
+
+Schema::create('documents', function (Blueprint $table) {
+    $table->id();
+    $table->text('content');
+    $table->vector('embedding', 1536);
+
+    // IVF-Flat index on cosine distance (default)
+    $table->vectorIndex('embedding')->lists(100);
+});
+```
+
+`vectorIndex($column, $name = null, $algorithm = 'ivfflat', $operatorClass = 'vector_cosine_ops')`:
+
+| Argument | Values |
+|----------|--------|
+| `$algorithm` | `ivfflat`, `hnsw` (experimental in MatrixOne; the driver enables `experimental_hnsw_index` for the statement's session) |
+| `$operatorClass` | `vector_cosine_ops` / `cosine`, `vector_l2_ops` / `l2`, `vector_ip_ops` / `ip` |
+| Fluent options | `->lists(n)` for IVF-Flat, `->m(n)`, `->efConstruction(n)`, `->efSearch(n)` for HNSW |
+
+Drop it with `$table->dropVectorIndex(['embedding'])`. Vector columns cannot be part of a primary or unique key.
+
+## Altering tables
+
+Adding, changing (`->change()`), renaming and dropping columns, table comments and `Schema::rename()` work. Each Blueprint command runs as its own statement, which MatrixOne requires when adding a column and an index together.
+
+## Introspection
+
+`Schema::getTables()`, `getViews()`, `getColumns()`, `getIndexes()`, `getForeignKeys()`, `hasTable()`, `hasColumn()` and `hasIndex()` return Laravel's documented shapes:
+
+- MatrixOne's system databases (`mo_catalog`, `mo_task`, `system`...) are excluded.
+- Hidden columns (`__mo_fake_pk_col` for tables without a primary key) are excluded.
+- Foreign keys are read from `mo_catalog.mo_foreign_keys`, because `information_schema.key_column_usage` is empty in MatrixOne.
+- Table `size` is always `0`.

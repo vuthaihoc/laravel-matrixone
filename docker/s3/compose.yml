@@ -1,0 +1,29 @@
+# Standalone MatrixOne whose table data lives on S3 / MinIO.
+# Edit the [fileservice.s3] sections in ./etc/*.toml first, then:
+#   docker compose up -d
+services:
+  matrixone:
+    image: matrixorigin/matrixone:${MATRIXONE_TAG:-4.2.4}
+    container_name: matrixone-s3
+    # The log service stores its data under a directory named after the
+    # hostname. Keep it fixed, or a re-created container fails to start
+    # with "shard not bootstrapped".
+    hostname: matrixone
+    # The image launches /etc/quickstart/launch.toml (local disk only);
+    # point it at the S3 configuration mounted from ./etc instead.
+    entrypoint:
+      - /mo-service
+      - -debug-http=:12345
+      - -launch
+      - /mo_confs/launch.toml
+    ports:
+      - "6001:6001"
+    volumes:
+      # launch.toml, cn.toml, tn.toml and log.toml
+      - ./etc:/mo_confs:ro
+      # Must persist: the log service WAL and TN state stay on local disk.
+      # Losing this directory leaves the data on S3 unusable.
+      - ./mo-data:/mo-data
+      # Local disk cache for the S3 data.
+      - ./mo-cache:/mo-cache
+    restart: unless-stopped

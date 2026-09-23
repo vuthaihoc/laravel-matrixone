@@ -1,0 +1,80 @@
+# Installation
+
+- [Requirements](#requirements)
+- [Install the package](#install-the-package)
+- [Configure a connection](#configure-a-connection)
+- [Configuration options](#configuration-options)
+- [Running MatrixOne locally](#running-matrixone-locally)
+
+## Requirements
+
+| Component | Version |
+|-----------|---------|
+| PHP | 8.2+ with `pdo_mysql` |
+| Laravel | 12.x or 13.x |
+| MatrixOne | 4.2+ (tested on 4.2.4) |
+
+## Install the package
+
+```bash
+composer require vuthaihoc/laravel-matrixone
+```
+
+The service provider is auto-discovered. It registers the `matrixone` database driver.
+
+## Configure a connection
+
+Add a connection to `config/database.php`:
+
+```php
+'connections' => [
+    'matrixone' => [
+        'driver' => 'matrixone',
+        'host' => env('DB_HOST', '127.0.0.1'),
+        'port' => env('DB_PORT', 6001),
+        'database' => env('DB_DATABASE', 'laravel'),
+        'username' => env('DB_USERNAME', 'root'),
+        'password' => env('DB_PASSWORD', '111'),
+        'charset' => 'utf8mb4',
+        'collation' => 'utf8mb4_unicode_ci',
+        'prefix' => '',
+        'prefix_indexes' => true,
+        'strict' => true,
+        'engine' => null,
+        'options' => [],
+    ],
+],
+```
+
+To use MatrixOne as the application's main database, set it as the default:
+
+```dotenv
+DB_CONNECTION=matrixone
+DB_HOST=127.0.0.1
+DB_PORT=6001
+DB_DATABASE=laravel
+DB_USERNAME=root
+DB_PASSWORD=111
+```
+
+The database itself must exist. Create it once with any MySQL client:
+
+```sql
+create database laravel;
+```
+
+## Configuration options
+
+The driver accepts every option of Laravel's `mysql` driver (`read` / `write` hosts, `sticky`, `unix_socket`, `timezone`, `isolation_level`, `modes`, `options`...). MatrixOne-specific options:
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `emulate_prepares` | `true` | Use PDO emulated prepares. MatrixOne rejects placeholders in some positions (for example inside `MATCH ... AGAINST`) and its server-side prepared statements have known metadata caching issues. Set to `false` to use native prepares. An explicit `PDO::ATTR_EMULATE_PREPARES` in `options` takes precedence. |
+
+## Running MatrixOne locally
+
+```bash
+docker run -d -p 6001:6001 --name matrixone matrixorigin/matrixone:4.2.4
+```
+
+The default account is `root` with password `111`. See [Running MatrixOne with Docker](./docker) for a persistent standalone setup and for storing data on S3.
