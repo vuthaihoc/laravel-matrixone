@@ -145,6 +145,16 @@ class EloquentTest extends TestCase
         $this->assertEqualsWithDelta(0.0, (float) Post::selectVectorDistance('embedding', [1, 0, 0])->orderBy('embedding_distance')->value('embedding_distance'), 1e-6);
     }
 
+    public function testCreatedModelsGetTheirRealKeyOnFullTextTables(): void
+    {
+        // tags has a FULLTEXT index, where LAST_INSERT_ID() is unreliable.
+        foreach (['a', 'b', 'c'] as $name) {
+            $tag = Tag::create(['name' => $name, 'description' => "about {$name}"]);
+
+            $this->assertSame($name, Tag::whereKey($tag->getKey())->value('name'));
+        }
+    }
+
     public function testFullTextSearch(): void
     {
         Tag::create(['name' => 'a', 'description' => 'matrixone is fast']);

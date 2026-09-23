@@ -2,6 +2,8 @@
 
 namespace MatrixOne\Query\Processors;
 
+use Illuminate\Database\Connection;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Database\Query\Processors\MySqlProcessor;
 
 class MatrixOneProcessor extends MySqlProcessor
@@ -13,6 +15,35 @@ class MatrixOneProcessor extends MySqlProcessor
      * @var string[]
      */
     protected array $integerTypes = ['tinyint', 'smallint', 'mediumint', 'int', 'integer', 'bigint'];
+
+    /**
+     * {@inheritDoc}
+     *
+     * The grammar compiles `INSERT ... RETURNING <key>`, so the ID is read
+     * from the returned row rather than from LAST_INSERT_ID().
+     *
+     * @param  array<int|string, mixed>  $values
+     */
+    public function processInsertGetId(Builder $query, $sql, $values, $sequence = null)
+    {
+        $connection = $query->getConnection();
+
+        if (! $connection instanceof Connection) {
+            return parent::processInsertGetId($query, $sql, $values, $sequence);
+        }
+
+        $results = $connection->selectFromWriteConnection($sql, $values);
+
+        // select() does not flag the connection as modified, which sticky
+        // read/write connections rely on to route later reads to the writer.
+        $connection->recordsHaveBeenModified();
+
+        $row = (array) ($results[0] ?? []);
+
+        $id = $row[$sequence ?: 'id'] ?? (array_values($row)[0] ?? null);
+
+        return is_numeric($id) ? (int) $id : $id;
+    }
 
     /** {@inheritDoc} */
     public function processColumns($results)

@@ -4,7 +4,6 @@ namespace MatrixOne\Tests\Unit\Query;
 
 use InvalidArgumentException;
 use MatrixOne\Tests\Unit\TestCase;
-use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 
 class GrammarTest extends TestCase
@@ -71,14 +70,6 @@ class GrammarTest extends TestCase
         );
     }
 
-    public function testJsonContainsKeyUsesJsonExtract(): void
-    {
-        $this->assertSame(
-            'select * from `posts` where json_extract(`meta`, \'$."a"."b"\') is not null',
-            $this->query()->from('posts')->whereJsonContainsKey('meta->a->b')->toSql()
-        );
-    }
-
     public function testJsonBooleanComparesUnquotedText(): void
     {
         $this->assertSame(
@@ -87,24 +78,46 @@ class GrammarTest extends TestCase
         );
     }
 
-    /**
-     * @return array<string, array{0: callable}>
-     */
-    public static function unsupportedJsonOperations(): array
+    public function testInsertGetIdUsesReturning(): void
     {
-        return [
-            'contains' => [fn ($query) => $query->whereJsonContains('meta->tags', 'x')],
-            'overlaps' => [fn ($query) => $query->whereJsonOverlaps('meta->tags', ['x'])],
-            'length' => [fn ($query) => $query->whereJsonLength('meta->tags', 2)],
-        ];
+        $query = $this->query()->from('users');
+
+        $this->assertSame(
+            'insert into `users` (`name`) values (?) returning `id`',
+            $query->getGrammar()->compileInsertGetId($query, ['name' => 'a'], null)
+        );
+        $this->assertSame(
+            'insert into `users` (`name`) values (?) returning `uid`',
+            $query->getGrammar()->compileInsertGetId($query, ['name' => 'a'], 'uid')
+        );
     }
 
-    #[DataProvider('unsupportedJsonOperations')]
-    public function testUnsupportedJsonOperationsThrow(callable $callback): void
+    public function testJsonFunctionsSupportedByMatrixOne(): void
     {
-        $this->expectException(RuntimeException::class);
+        $this->assertSame(
+            'select * from `posts` where json_contains(`meta`, ?, \'$."tags"\')',
+            $this->query()->from('posts')->whereJsonContains('meta->tags', 'x')->toSql()
+        );
+        $this->assertSame(
+            'select * from `posts` where json_length(`meta`, \'$."tags"\') = ?',
+            $this->query()->from('posts')->whereJsonLength('meta->tags', 2)->toSql()
+        );
+        $this->assertSame(
+            'select * from `posts` where ifnull(json_contains_path(`meta`, \'one\', \'$."a"."b"\'), 0)',
+            $this->query()->from('posts')->whereJsonContainsKey('meta->a->b')->toSql()
+        );
+    }
 
-        $callback($this->query()->from('posts'))->toSql();
+    public function testJsonOverlapsPassesTwoDocuments(): void
+    {
+        $this->assertSame(
+            'select * from `posts` where json_overlaps(json_extract(`meta`, \'$."tags"\'), ?)',
+            $this->query()->from('posts')->whereJsonOverlaps('meta->tags', ['x'])->toSql()
+        );
+        $this->assertSame(
+            'select * from `posts` where json_overlaps(`meta`, ?)',
+            $this->query()->from('posts')->whereJsonOverlaps('meta', ['a' => 1])->toSql()
+        );
     }
 
     public function testLateralJoinsThrow(): void

@@ -39,6 +39,21 @@ class Grammar extends MySqlGrammar
     /**
      * {@inheritDoc}
      *
+     * MatrixOne's LAST_INSERT_ID() is wrong for tables with a FULLTEXT index
+     * (it reports internal index row IDs), so the generated key is read
+     * back with `INSERT ... RETURNING` instead.
+     *
+     * @param  array<int|string, mixed>  $values
+     * @param  string|null  $sequence
+     */
+    public function compileInsertGetId(Builder $query, $values, $sequence)
+    {
+        return $this->compileInsert($query, $values).' returning '.$this->wrap($sequence ?: 'id');
+    }
+
+    /**
+     * {@inheritDoc}
+     *
      * @param  array<int|string, mixed>  $values
      * @param  array<int, string>  $uniqueBy
      * @param  array<int|string, mixed>  $update
@@ -128,35 +143,20 @@ class Grammar extends MySqlGrammar
         return false;
     }
 
-    /** {@inheritDoc} */
-    protected function compileJsonContains($column, $value)
-    {
-        throw new RuntimeException('JSON contains operations are not supported by MatrixOne.');
-    }
-
-    /** {@inheritDoc} */
-    protected function compileJsonOverlaps($column, $value)
-    {
-        throw new RuntimeException('JSON overlaps operations are not supported by MatrixOne.');
-    }
-
-    /** {@inheritDoc} */
-    protected function compileJsonLength($column, $operator, $value)
-    {
-        throw new RuntimeException('JSON length operations are not supported by MatrixOne.');
-    }
-
     /**
      * {@inheritDoc}
      *
-     * MatrixOne lacks json_contains_path(); a path exists when extracting it
-     * yields a value. A key explicitly set to JSON null is reported missing.
+     * MatrixOne's json_overlaps() takes exactly two documents, so the path
+     * is applied with json_extract() instead of being passed as a third
+     * argument.
      */
-    protected function compileJsonContainsKey($column)
+    protected function compileJsonOverlaps($column, $value)
     {
         [$field, $path] = $this->wrapJsonFieldAndPath($column);
 
-        return 'json_extract('.$field.$path.') is not null';
+        $document = $path === '' ? $field : 'json_extract('.$field.$path.')';
+
+        return 'json_overlaps('.$document.', '.$value.')';
     }
 
     /**

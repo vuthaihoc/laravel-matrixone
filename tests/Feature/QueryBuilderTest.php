@@ -5,7 +5,6 @@ namespace MatrixOne\Tests\Feature;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use RuntimeException;
 
 class QueryBuilderTest extends TestCase
 {
@@ -168,7 +167,7 @@ class QueryBuilderTest extends TestCase
         DB::table('qb_posts')->insert([
             'user_id' => $id,
             'title' => 'json',
-            'meta' => json_encode(['a' => ['b' => 1], 'active' => true, 'tags' => ['x', 'y']]),
+            'meta' => json_encode(['a' => ['b' => 1], 'active' => true, 'tags' => ['x', 'y'], 'missing_value' => null]),
         ]);
 
         $this->assertSame(1, DB::table('qb_posts')->where('meta->a->b', 1)->count());
@@ -178,11 +177,37 @@ class QueryBuilderTest extends TestCase
         $this->assertSame(0, DB::table('qb_posts')->whereJsonDoesntContainKey('meta->a->b')->count());
         $this->assertSame('1', (string) DB::table('qb_posts')->value('meta->a->b'));
 
+        $this->assertSame(1, DB::table('qb_posts')->whereJsonContains('meta->tags', 'x')->count());
+        $this->assertSame(1, DB::table('qb_posts')->whereJsonContains('meta->tags', ['x', 'y'])->count());
+        $this->assertSame(0, DB::table('qb_posts')->whereJsonDoesntContain('meta->tags', 'x')->count());
+        $this->assertSame(1, DB::table('qb_posts')->whereJsonLength('meta->tags', 2)->count());
+        $this->assertSame(1, DB::table('qb_posts')->whereJsonLength('meta->tags', '>', 1)->count());
+        $this->assertSame(1, DB::table('qb_posts')->whereJsonOverlaps('meta->tags', ['y', 'z'])->count());
+        $this->assertSame(0, DB::table('qb_posts')->whereJsonOverlaps('meta->tags', ['z'])->count());
+        $this->assertSame(1, DB::table('qb_posts')->whereJsonContainsKey('meta->missing_value')->count());
+
         DB::table('qb_posts')->update(['meta->a->b' => 2]);
         $this->assertSame(2, json_decode((string) DB::table('qb_posts')->value('meta'), true)['a']['b']);
+    }
 
-        $this->expectException(RuntimeException::class);
-        DB::table('qb_posts')->whereJsonContains('meta->tags', 'x')->count();
+    public function testInsertGetIdOnATableWithAFullTextIndex(): void
+    {
+        // MatrixOne's LAST_INSERT_ID() reports wrong values for such tables;
+        // the driver reads the key back with INSERT ... RETURNING.
+        foreach (['alpha', 'beta', 'gamma'] as $title) {
+            $id = DB::table('qb_articles')->insertGetId(['title' => $title]);
+
+            $this->assertSame($title, DB::table('qb_articles')->where('id', $id)->value('title'));
+        }
+    }
+
+    public function testInsertGetIdMarksTheConnectionAsModified(): void
+    {
+        DB::connection()->forgetRecordModificationState();
+
+        DB::table('qb_articles')->insertGetId(['title' => 'sticky']);
+
+        $this->assertTrue(DB::connection()->hasModifiedRecords());
     }
 
     public function testFullTextSearch(): void
