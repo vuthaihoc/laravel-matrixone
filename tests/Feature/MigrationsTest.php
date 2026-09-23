@@ -33,12 +33,12 @@ class MigrationsTest extends TestCase
         $this->assertTrue(Schema::hasTable('migrations'));
         $this->assertTrue(Schema::hasTable('users'));
         $this->assertTrue(Schema::hasTable('post_tag'));
-        $this->assertSame(4, DB::table('migrations')->count());
+        $this->assertSame(5, DB::table('migrations')->count());
 
         // Running again must be a no-op: hasTable() has to report the
         // migrations table correctly for that.
         $this->artisan('migrate', ['--path' => $this->path(), '--realpath' => true])->assertSuccessful();
-        $this->assertSame(4, DB::table('migrations')->count());
+        $this->assertSame(5, DB::table('migrations')->count());
 
         $this->artisan('migrate:rollback', ['--path' => $this->path(), '--realpath' => true])->assertSuccessful();
         $this->assertFalse(Schema::hasTable('users'));
