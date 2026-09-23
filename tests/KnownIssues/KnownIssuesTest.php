@@ -241,6 +241,40 @@ class KnownIssuesTest extends TestCase
     }
 
     /**
+     * MATCH ... AGAINST combined with other predicates by OR:
+     * "cannot be replaced by FULLTEXT INDEX and full table scan with fulltext
+     * search is not supported yet".
+     * Driver workaround: the Scout engine selects full-text matches through a
+     * subquery (`id in (select id ... where match ...)`).
+     */
+    public function testFullTextMatchInsideAnOrCondition(): void
+    {
+        $rows = $this->runSql(
+            'create table fo_docs (id int primary key, title varchar(50), body text)',
+            "insert into fo_docs values (1, 'a', 'database'), (2, 'database', 'b')",
+            'alter table fo_docs add fulltext fo_docs_body_fulltext(body)',
+            "select id from fo_docs where title like '%database%' or match(body) against('database') order by id",
+        );
+
+        $this->assertSame([['id' => 1], ['id' => 2]], $rows);
+    }
+
+    /**
+     * ILIKE rejects numbers, decimals and dates, which MySQL's LIKE matches.
+     * Driver workaround: case-insensitive LIKE compiles to `cast(col as text) ilike ?`.
+     */
+    public function testIlikeOnNonStringColumns(): void
+    {
+        $rows = $this->runSql(
+            'create table il_items (id bigint unsigned primary key, created_at datetime)',
+            "insert into il_items values (123, '2026-01-02 03:04:05')",
+            "select id from il_items where id ilike '%2%' and created_at ilike '2026%'",
+        );
+
+        $this->assertSame([['id' => 123]], $rows);
+    }
+
+    /**
      * Full-text query expansion.
      * Driver workaround: whereFullText(..., ['expanded' => true]) throws.
      */
