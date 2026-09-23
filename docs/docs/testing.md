@@ -39,6 +39,14 @@ Point the test environment at a dedicated database in `phpunit.xml`:
 ## Running this package's test suite
 
 ```bash
+composer test               # Unit + Feature
+composer test:known-issues  # open MatrixOne bugs, expected to fail (see Compatibility)
+```
+
+The `KnownIssues` suite is excluded from `composer test`; each test asserts MySQL's behaviour, so a passing test means a MatrixOne release fixed that issue.
+
+
+```bash
 (cd docker/standalone && docker compose up -d)   # MatrixOne 4.2.4 on port 6001
 composer test                 # unit + feature tests
 ```

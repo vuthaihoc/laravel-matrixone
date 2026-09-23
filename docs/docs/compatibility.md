@@ -43,6 +43,13 @@ MatrixOne speaks the MySQL 8.0 protocol but implements a subset of MySQL. This p
 
 ## Known MatrixOne issues
 
+The package's `tests/KnownIssues` suite reproduces each open issue in plain SQL and asserts MySQL's behaviour, so it fails while the issue exists. Run it against a new MatrixOne release to see what got fixed:
+
+```bash
+composer test:known-issues
+```
+
+- **4.2.4 panic on correlated counts.** `loadCount()` / `withCount()` on a single parent selected by primary key (`find($id)`, `whereIn('id', [$id])`) crashes the server when the related query has an extra condition, e.g. SoftDeletes (`Error reading result set's header`). Count on the relation instead: `$user->posts()->count()`. The driver drops the broken connection, forgetting its transaction, so later queries reconnect instead of blocking on the row locks the dead session still holds.
 - `=` compares strings case-sensitively even on `_ci` collations; the driver cannot change this without losing index use.
 - **4.2.4:** inserting into a table with both a foreign key and a FULLTEXT index panics in the query planner. Keep full-text indexes on tables without their own foreign keys.
 - **FULLTEXT2** indexes (4.2.2+) are experimental and are not indexed synchronously; the driver does not use them.

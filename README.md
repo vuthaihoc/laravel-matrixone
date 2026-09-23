@@ -90,6 +90,13 @@ Document::nearestTo('embedding', [0.1, 0.2, 0.25], 5)->get();
 Document::whereVectorSimilarTo('embedding', [0.1, 0.2, 0.25], minSimilarity: 0.8)->get();
 ```
 
+## AI assistants (Laravel Boost)
+
+The package ships [Laravel Boost](https://github.com/laravel/boost) resources, picked up automatically when you run `php artisan boost:install` (or `boost:update`):
+
+- a guideline (`resources/boost/guidelines/core.blade.php`) with the rules an AI agent must follow on MatrixOne, such as no FULLTEXT index on a table with foreign keys, case-sensitive `=` and no JSON defaults;
+- a `matrixone-development` skill (`resources/boost/skills/matrixone-development/SKILL.md`) covering schema design, queries, full-text, vectors, session variables and known server bugs.
+
 ## Documentation
 
 | Page | Content |
