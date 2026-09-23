@@ -12,3 +12,4 @@ phpunit.xml
 /docs/.vitepress/cache
 /CLAUDE.local.md
 /node_modules
+/matrixone_docs
