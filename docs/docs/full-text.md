@@ -141,8 +141,57 @@ DB::connection('matrixone')->statement('alter table articles alter reindex artic
 
 Queries use the same `whereFullText()` / relevance helpers. Prefer the classic `FULLTEXT` index unless you need FULLTEXT2's features.
 
+## Laravel Scout
+
+The package registers a Scout engine for MatrixOne. Use it instead of Scout's `database` engine:
+
+```dotenv
+SCOUT_DRIVER=matrixone
+```
+
+It behaves like Scout's database engine (`LIKE` columns, `#[SearchUsingPrefix]`, `#[SearchUsingFullText]`, `where`/`whereIn`, pagination, soft deletes) with three differences:
+
+- Full-text matches are selected through a subquery. MatrixOne cannot combine `MATCH ... AGAINST` with the `LIKE` conditions by `OR`, so Scout's own `database` engine fails on models that mix full-text and `LIKE` columns (it works for `LIKE`-only models).
+- Results are ordered by full-text relevance, as Scout does on PostgreSQL.
+- Semantic and hybrid search, which Scout enables on PostgreSQL only, work on MatrixOne vector columns:
+
+```php
+use Laravel\Scout\Attributes\SearchUsingFullText;
+use Laravel\Scout\Searchable;
+use MatrixOne\Eloquent\Casts\AsVector;
+
+class Article extends Model
+{
+    use Searchable;
+
+    protected function casts(): array
+    {
+        return ['embedding' => AsVector::class];
+    }
+
+    #[SearchUsingFullText(['title', 'body'])]
+    public function toSearchableArray(): array
+    {
+        return ['id' => $this->id, 'title' => $this->title, 'body' => $this->body];
+    }
+
+    // A string is embedded with the Laravel AI SDK; an array is stored as is.
+    public function toSearchableEmbedding(): string|array
+    {
+        return $this->title."\n".$this->body;
+    }
+}
+
+Article::search('vector database')->get();              // LIKE + full-text, by relevance
+Article::search('how to store songs')->semantic()->get(); // cosine similarity
+Article::search('songs')->hybrid()->get();                // rank fusion of both
+```
+
+The table needs a `vector('embedding', <dimensions>)` column (or the column named by `searchableEmbeddingColumn()`) and, for full-text columns, a FULLTEXT index; keep that table free of foreign keys (MatrixOne 4.2.4). Embeddings of search terms are generated with the [Laravel AI SDK](https://github.com/laravel/ai) (`laravel/ai`).
+
 ## Limitations
 
 - **MatrixOne 4.2.4 crash:** inserting into a table that has both its own foreign key and a FULLTEXT index panics in the query planner. Keep full-text indexes on tables without foreign keys (being *referenced* by a foreign key is fine).
 - **`LAST_INSERT_ID()` is wrong on FULLTEXT tables.** The driver already reads generated keys with `insert ... returning`; avoid `select last_insert_id()` in raw SQL.
 - Query expansion is not supported.
+- `MATCH ... AGAINST` cannot be combined with other conditions by `OR` (`->orWhereFullText()` next to other `where`s). Select the matches with a subquery instead: `->orWhereIn('id', DB::table('articles')->select('id')->whereFullText('body', $term))`.

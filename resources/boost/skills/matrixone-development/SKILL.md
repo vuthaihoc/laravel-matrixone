@@ -89,7 +89,9 @@ Article::searchFullText(['title', 'body'], $term)->limit(20)->get();            
 Article::select('id')->selectFullTextRelevance(['title', 'body'], $term, as: 'score')->get();
 ```
 
-Query expansion (`['expanded' => true]`) throws. The columns must match one FULLTEXT index.
+Query expansion (`['expanded' => true]`) throws. The columns must match one FULLTEXT index. MatrixOne cannot OR a `MATCH ... AGAINST` with other conditions: write `->orWhereIn('id', DB::table('t')->select('id')->whereFullText(...))` instead of `->orWhereFullText(...)` next to other wheres.
+
+Laravel Scout: use `SCOUT_DRIVER=matrixone` (not `database`): it handles full-text + LIKE columns, orders by relevance and supports `->semantic()` / `->hybrid()` with a `vector('embedding', n)` column and `toSearchableEmbedding()`.
 
 Vectors:
 

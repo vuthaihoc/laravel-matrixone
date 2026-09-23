@@ -16,7 +16,9 @@ MatrixOne speaks the MySQL 8.0 protocol but implements a subset of MySQL. This p
 | No savepoints | Nested transactions are flattened (see [Eloquent › Transactions](./eloquent#transactions)) |
 | `json_overlaps()` takes exactly two documents | The JSON path is applied with `json_extract()` |
 | `SET` assignments all read the original row | JSON path updates of one column share one `json_set()` |
-| `LIKE` ignores `_ci` collations | `like` / `whereLike()` compile to `ilike` |
+| `LIKE` ignores `_ci` collations | `like` / `whereLike()` compile to `cast(col as text) ilike` |
+| `ILIKE` rejects numbers and dates | Columns are cast to text first |
+| `MATCH ... AGAINST` cannot be OR-ed with other conditions | The Scout engine uses a subquery; see [Full-text › Limitations](./full-text#limitations) |
 | `LAST_INSERT_ID()` is wrong on tables with a FULLTEXT index | `insertGetId()` uses `insert ... returning` |
 | Identifiers are limited to 64 characters | Long index names are shortened consistently |
 | JSON booleans cannot be compared with SQL `true` | Compared as unquoted text |
