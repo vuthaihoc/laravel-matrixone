@@ -7,9 +7,11 @@ use Illuminate\Database\Console\DbCommand as BaseDbCommand;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Schema\ColumnDefinition;
 use Illuminate\Support\ServiceProvider;
+use Laravel\Pulse\Storage\DatabaseStorage as PulseDatabaseStorage;
 use Laravel\Scout\EngineManager;
 use MatrixOne\Connectors\MatrixOneConnector;
 use MatrixOne\Console\DbCommand;
+use MatrixOne\Pulse\MatrixOneStorage;
 use MatrixOne\Scout\MatrixOneEngine;
 
 class MatrixOneServiceProvider extends ServiceProvider
@@ -39,8 +41,25 @@ class MatrixOneServiceProvider extends ServiceProvider
             });
         }
 
+        // Pulse's database storage only knows Laravel's built-in drivers.
+        if (class_exists(PulseDatabaseStorage::class)) {
+            $this->app->bind(PulseDatabaseStorage::class, MatrixOneStorage::class);
+        }
+
         // `php artisan db` only knows Laravel's built-in drivers.
         $this->app->extend(BaseDbCommand::class, fn ($command, $app) => $app->make(DbCommand::class));
+    }
+
+    /**
+     * Publish the MatrixOne version of optional package migrations.
+     */
+    public function boot(): void
+    {
+        if ($this->app->runningInConsole() && class_exists(PulseDatabaseStorage::class)) {
+            $this->publishes([
+                __DIR__.'/../database/pulse' => $this->app->databasePath('migrations'),
+            ], 'matrixone-pulse-migrations');
+        }
     }
 
     /**

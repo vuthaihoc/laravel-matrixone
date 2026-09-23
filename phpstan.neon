@@ -6,7 +6,7 @@ parameters:
   ignoreErrors:
     # Dynamic SQL vs Laravel 13's literal-string typing on Expression / whereRaw.
     - '#Illuminate\\Database\\Query\\Expression constructor expects TValue#'
-    - '#whereRaw\(\) expects .*literal-string#'
+    - '#(whereRaw|selectRaw)\(\) expects .*literal-string#'
     # Laravel's schema Fluent commands and columns expose their attributes magically.
     - '#Access to an undefined property Illuminate\\Support\\Fluent(<string, mixed>)?::\$\w+\.#'
     - '#Access to an undefined property Illuminate\\Database\\Schema\\ColumnDefinition::\$\w+\.#'

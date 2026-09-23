@@ -122,6 +122,47 @@ class MatrixOneConnection extends MySqlConnection
         return $values;
     }
 
+    /**
+     * Whether query rewrites for MatrixOne bugs are active, see withCompatibilityRewrites().
+     */
+    protected bool $compatibilityRewrites = false;
+
+    /**
+     * Run the callback with rewrites that work around MatrixOne bugs in
+     * query shapes some packages rely on (used for Laravel Pulse):
+     *
+     * - `selectRaw('null as alias')` becomes `cast(null as double) as alias`:
+     *   a bare NULL in a UNION is typed VARCHAR, breaking sum()/avg() over it.
+     * - A select-list subquery selecting one column with `limit 1` selects
+     *   `max(column)` without the limit: MatrixOne returns NULL for most rows
+     *   of a correlated scalar subquery with LIMIT. Only use this where every
+     *   candidate row holds the same value (e.g. looking up a name by hash).
+     *
+     * @template TReturn
+     *
+     * @param  Closure(): TReturn  $callback
+     * @return TReturn
+     */
+    public function withCompatibilityRewrites(Closure $callback): mixed
+    {
+        $previous = $this->compatibilityRewrites;
+        $this->compatibilityRewrites = true;
+
+        try {
+            return $callback();
+        } finally {
+            $this->compatibilityRewrites = $previous;
+        }
+    }
+
+    /**
+     * Determine whether compatibility rewrites are active.
+     */
+    public function usesCompatibilityRewrites(): bool
+    {
+        return $this->compatibilityRewrites;
+    }
+
     /** {@inheritDoc} */
     public function query()
     {

@@ -4,11 +4,13 @@ namespace MatrixOne\Query;
 
 use Illuminate\Contracts\Database\Query\Expression as ExpressionContract;
 use Illuminate\Contracts\Support\Arrayable;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Query\Builder as BaseBuilder;
 use Illuminate\Database\Query\Expression;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Stringable;
 use InvalidArgumentException;
+use MatrixOne\MatrixOneConnection;
 use MatrixOne\Support\Vector;
 
 /**
@@ -97,6 +99,60 @@ class Builder extends BaseBuilder
         }
 
         return $vector;
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * Inside MatrixOneConnection::withCompatibilityRewrites(), `null as alias`
+     * placeholders become `cast(null as double) as alias`.
+     *
+     * @param  string  $expression
+     * @param  array<int, mixed>  $bindings
+     * @return $this
+     */
+    public function selectRaw($expression, array $bindings = [])
+    {
+        if ($this->connection instanceof MatrixOneConnection
+            && $this->connection->usesCompatibilityRewrites()
+            && is_string($expression)) {
+            $expression = (string) preg_replace('/^\s*null\s+as\s+/i', 'cast(null as double) as ', $expression);
+        }
+
+        return parent::selectRaw($expression, $bindings);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * Inside MatrixOneConnection::withCompatibilityRewrites(), a subquery
+     * selecting a single column with `limit 1` selects `max(column)` instead.
+     *
+     * @param  \Closure|BaseBuilder|\Illuminate\Database\Eloquent\Builder<Model>|string  $query
+     * @param  string  $as
+     * @return $this
+     */
+    public function selectSub($query, $as)
+    {
+        if ($this->connection instanceof MatrixOneConnection && $this->connection->usesCompatibilityRewrites()) {
+            if ($query instanceof \Closure) {
+                $callback = $query;
+                $callback($query = $this->forSubQuery());
+            }
+
+            if ($query instanceof BaseBuilder
+                && $query->limit === 1
+                && empty($query->offset)
+                && is_array($query->columns)
+                && count($query->columns) === 1
+                && is_string($query->columns[0])) {
+                $query->limit = null;
+                $query->orders = null;
+                $query->columns = [new Expression('max('.$this->grammar->wrap($query->columns[0]).')')];
+            }
+        }
+
+        return parent::selectSub($query, $as);
     }
 
     /**
