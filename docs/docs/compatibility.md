@@ -53,4 +53,4 @@ composer test:known-issues
 - `=` compares strings case-sensitively even on `_ci` collations; the driver cannot change this without losing index use.
 - **4.2.4:** inserting into a table with both a foreign key and a FULLTEXT index panics in the query planner. Keep full-text indexes on tables without their own foreign keys.
 - **FULLTEXT2** indexes (4.2.2+) are experimental and are not indexed synchronously; the driver does not use them.
-- **HNSW** vector indexes are experimental; the driver enables them for the creating session only.
+- **HNSW** vector indexes are experimental: they need a signed `BIGINT` primary key and are maintained asynchronously (sync with `alter reindex ... hnsw force_sync`). `vectorIndex()` builds IVF-Flat unless `->hnsw()` is called.

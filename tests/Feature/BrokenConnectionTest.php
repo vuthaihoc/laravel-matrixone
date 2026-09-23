@@ -3,9 +3,9 @@
 namespace MatrixOne\Tests\Feature;
 
 use Illuminate\Database\QueryException;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use MatrixOne\Schema\Blueprint;
 
 /**
  * When MatrixOne panics while executing a statement it leaves the PDO

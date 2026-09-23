@@ -12,7 +12,7 @@ MatrixOne ships a MySQL-compatible `FULLTEXT` index. It is maintained synchronou
 ## Creating indexes
 
 ```php
-use MatrixOne\Schema\Blueprint;
+use Illuminate\Database\Schema\Blueprint;
 
 Schema::create('articles', function (Blueprint $table) {
     $table->id();

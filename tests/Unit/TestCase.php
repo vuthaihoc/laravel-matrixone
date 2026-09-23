@@ -2,14 +2,23 @@
 
 namespace MatrixOne\Tests\Unit;
 
+use Illuminate\Database\Schema\Blueprint;
 use LogicException;
 use MatrixOne\MatrixOneConnection;
+use MatrixOne\MatrixOneServiceProvider;
 use MatrixOne\Query\Builder;
-use MatrixOne\Schema\Blueprint;
 use PHPUnit\Framework\TestCase as BaseTestCase;
 
 abstract class TestCase extends BaseTestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // The service provider is not booted in unit tests.
+        MatrixOneServiceProvider::registerBlueprintMacros();
+    }
+
     /**
      * A connection whose PDO must never be touched: unit tests only compile SQL.
      */

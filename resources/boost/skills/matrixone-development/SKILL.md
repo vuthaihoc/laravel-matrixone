@@ -46,11 +46,12 @@ The database must exist before migrating (`create database laravel;`).
 | Unique e-mail / username | Lower-case in a mutator, unique index on the normalized value | Relying on `_ci` collation (ignored) |
 | UUID keys | `$table->uuid()` (stored as `char(36)`) | Native `uuid` column type (unreadable by PHP's mysqlnd) |
 | Year | `$table->year()` (becomes `smallint`) | |
-| Embeddings | `$table->vector('embedding', 1536)` + `$table->vectorIndex('embedding')->lists(100)` | Vector column in a primary/unique key |
+| Embeddings | `$table->vector('embedding', 1536)` + `$table->vectorIndex('embedding')->lists(100)` (IVF-Flat) | Vector column in a primary/unique key; `->hnsw()` on tables using `id()` (HNSW needs a signed BIGINT key and syncs asynchronously) |
 | Long TEXT lookup | FULLTEXT, or `rawIndex('body(100)', 'name')` | `index()` on TEXT (rejected) |
 | Computed values | Fill a normal column in a model event/observer | `virtualAs()` / `storedAs()` (throws) |
 
 Other schema facts:
+- Migrations type-hint Laravel's `Illuminate\Database\Schema\Blueprint`; `vector64()` is a macro added by the driver.
 - Index names longer than 64 characters are shortened automatically (prefix + hash); `hasIndex()`/`dropIndex()` accept the original name.
 - `id()->from(1000)` only works when creating the table.
 - `renameIndex()` works (drop + re-create). Foreign keys, `change()`, `renameColumn()`, comments work.

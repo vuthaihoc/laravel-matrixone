@@ -256,17 +256,23 @@ class Grammar extends MySqlGrammar
     }
 
     /**
-     * Compile a vector index command (IVF-Flat by default).
+     * Compile a vector index command: IVF-Flat, or HNSW with ->hnsw().
      *
      * @return string|string[]
      */
     public function compileVectorIndex(Blueprint $blueprint, Fluent $command)
     {
-        $algorithm = strtolower((string) ($command->algorithm ?: 'ivfflat'));
+        // Laravel's vectorIndex() always sets algorithm "hnsw" (pgvector's
+        // default). MatrixOne's HNSW is experimental and needs a signed BIGINT
+        // primary key, which Laravel's id() is not, so IVF-Flat is built
+        // unless HNSW is requested explicitly with ->hnsw().
+        $requested = strtolower((string) ($command->algorithm ?? ''));
 
-        if (! in_array($algorithm, $this->vectorIndexAlgorithms, true)) {
-            throw new InvalidArgumentException("Unsupported vector index algorithm [{$algorithm}].");
+        if (! in_array($requested, ['', ...$this->vectorIndexAlgorithms], true)) {
+            throw new InvalidArgumentException("Unsupported vector index algorithm [{$requested}].");
         }
+
+        $algorithm = $command->hnsw ? 'hnsw' : 'ivfflat';
 
         $options = [];
 
@@ -369,8 +375,8 @@ class Grammar extends MySqlGrammar
     /**
      * {@inheritDoc}
      *
-     * Laravel's `vector()` maps to a float32 vector; use `vector64()` on the
-     * MatrixOne blueprint for float64 elements.
+     * Laravel's `vector()` maps to a float32 vector; the driver's `vector64()`
+     * Blueprint macro creates float64 vectors.
      */
     protected function typeVector(Fluent $column)
     {

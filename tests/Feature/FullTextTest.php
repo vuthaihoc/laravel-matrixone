@@ -2,10 +2,10 @@
 
 namespace MatrixOne\Tests\Feature;
 
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use MatrixOne\MatrixOneConnection;
-use MatrixOne\Schema\Blueprint;
 use RuntimeException;
 
 class FullTextTest extends TestCase

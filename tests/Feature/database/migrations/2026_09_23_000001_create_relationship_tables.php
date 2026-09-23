@@ -1,8 +1,8 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
-use MatrixOne\Schema\Blueprint;
 
 // Extra tables for RelationshipTest. None of them combines a foreign key with
 // a FULLTEXT index (MatrixOne 4.2.4 panics on inserts into such tables).

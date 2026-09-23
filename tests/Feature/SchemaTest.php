@@ -2,10 +2,9 @@
 
 namespace MatrixOne\Tests\Feature;
 
-use Illuminate\Database\Schema\Blueprint as BaseBlueprint;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use MatrixOne\Schema\Blueprint;
 use RuntimeException;
 
 class SchemaTest extends TestCase
@@ -26,12 +25,10 @@ class SchemaTest extends TestCase
         parent::tearDown();
     }
 
-    public function testTheBlueprintIsTheMatrixOneBlueprint(): void
+    public function testBlueprintMacrosAreRegistered(): void
     {
-        Schema::create('sc_things', function (BaseBlueprint $table) {
-            $this->assertInstanceOf(Blueprint::class, $table);
-            $table->id();
-        });
+        $this->assertTrue(Blueprint::hasMacro('vector64'));
+        $this->assertTrue(method_exists(Blueprint::class, 'vectorIndex') || Blueprint::hasMacro('vectorIndex'));
     }
 
     public function testEveryCommonColumnType(): void
@@ -219,6 +216,25 @@ class SchemaTest extends TestCase
 
         Schema::table('sc_docs', fn (Blueprint $table) => $table->dropVectorIndex(['embedding']));
         $this->assertFalse(Schema::hasIndex('sc_docs', 'sc_docs_embedding_vectorindex'));
+    }
+
+    public function testHnswVectorIndexNeedsASignedBigintKey(): void
+    {
+        Schema::create('sc_hnsw', function (Blueprint $table) {
+            $table->bigInteger('id', autoIncrement: true);   // signed, unlike id()
+            $table->vector('embedding', 3);
+            $table->vectorIndex('embedding')->hnsw();
+        });
+
+        $index = collect(Schema::getIndexes('sc_hnsw'))->firstWhere('name', 'sc_hnsw_embedding_vectorindex');
+        $this->assertSame('hnsw', $index['type']);
+
+        // HNSW indexes are maintained asynchronously: rows inserted after the
+        // index exists are invisible to nearest-neighbour queries until synced.
+        DB::table('sc_hnsw')->insert([['embedding' => '[1,0,0]'], ['embedding' => '[0,1,0]']]);
+        DB::statement('alter table sc_hnsw alter reindex sc_hnsw_embedding_vectorindex hnsw force_sync');
+
+        $this->assertSame([1], DB::table('sc_hnsw')->nearestTo('embedding', [0.9, 0.1, 0], 1)->pluck('id')->all());
     }
 
     public function testViews(): void

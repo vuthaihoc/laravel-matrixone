@@ -27,7 +27,7 @@ Local runs may use a gitignored `phpunit.xml` (copied from `phpunit.xml.dist`) t
 - `src/Query/Grammar.php` — MySQL grammar overrides (exists, upsert, locks, RAND, savepoints off, JSON, DELETE safeguard, vector distance).
 - `src/Query/Builder.php` — truncate fallback, full-text relevance helpers (`searchFullText`, `selectFullTextRelevance`, `orderByFullTextRelevance`), vector helpers (`nearestTo`, `*VectorDistanceUsing`) and overrides of Laravel's vector methods.
 - `src/Query/Processors/MatrixOneProcessor.php` — normalizes column/index metadata.
-- `src/Schema/Grammar.php`, `Builder.php`, `Blueprint.php` — DDL and introspection overrides, vector columns and indexes.
+- `src/Schema/Grammar.php`, `Builder.php` — DDL and introspection overrides, vector columns and indexes. Blueprint additions (`vector64`, and `vectorIndex`/`dropVectorIndex` on Laravel versions lacking them) are macros registered in `MatrixOneServiceProvider::registerBlueprintMacros()`; do not reintroduce a Blueprint subclass.
 - `src/Eloquent/Casts/AsVector.php`, `src/Support/Vector.php` — vector literal conversion.
 
 `resources/boost/` holds the Laravel Boost guideline and the `matrixone-development` skill shipped to applications; update them together with `docs/docs/compatibility.md` whenever a pitfall or workaround changes.

@@ -29,7 +29,7 @@
 | `uuid()`, `ulid()` | `char(36)`, `char(26)` | MatrixOne's native `UUID` type is not readable by PHP's mysqlnd |
 | `binary()`, `ipAddress()`, `macAddress()` | same as MySQL | |
 | `vector($column, $dims)` | `vecf32(dims)` | dimensions are required |
-| `vector64($column, $dims)` | `vecf64(dims)` | MatrixOne blueprint only |
+| `vector64($column, $dims)` | `vecf64(dims)` | Blueprint macro added by the driver |
 | `set()` | ✗ | throws |
 | `geometry()`, `geography()` | ✗ | throws |
 | `virtualAs()`, `storedAs()` | ✗ | generated columns throw |
@@ -75,30 +75,44 @@ See [Full-text Search](./full-text) for parsers, relevance, session variables, F
 
 ## Vector columns and indexes
 
-The schema blueprint passed to your migration callbacks is `MatrixOne\Schema\Blueprint`:
+Migrations keep type-hinting Laravel's `Illuminate\Database\Schema\Blueprint`; the driver adds its methods as Blueprint macros.
 
 ```php
-use MatrixOne\Schema\Blueprint;
+use Illuminate\Database\Schema\Blueprint;
 
 Schema::create('documents', function (Blueprint $table) {
     $table->id();
     $table->text('content');
-    $table->vector('embedding', 1536);
+    $table->vector('embedding', 1536);      // vecf32
+    $table->vector64('precise', 3);         // vecf64 (macro)
 
-    // IVF-Flat index on cosine distance (default)
-    $table->vectorIndex('embedding')->lists(100);
+    $table->vectorIndex('embedding')->lists(100);   // IVF-Flat, cosine distance
 });
 ```
 
-`vectorIndex($column, $name = null, $algorithm = 'ivfflat', $operatorClass = 'vector_cosine_ops')`:
+`vectorIndex()` always builds an **IVF-Flat** index. Laravel's own `vectorIndex()` sets the algorithm to `hnsw` (pgvector's default); the driver ignores that because MatrixOne's HNSW index is experimental, needs a signed `BIGINT` primary key (Laravel's `id()` is unsigned) and is maintained asynchronously.
 
-| Argument | Values |
-|----------|--------|
-| `$algorithm` | `ivfflat`, `hnsw` (experimental in MatrixOne; the driver enables `experimental_hnsw_index` for the statement's session) |
-| `$operatorClass` | `vector_cosine_ops` / `cosine`, `vector_l2_ops` / `l2`, `vector_ip_ops` / `ip` |
-| Fluent options | `->lists(n)` for IVF-Flat, `->m(n)`, `->efConstruction(n)`, `->efSearch(n)` for HNSW |
+| Fluent option | Effect |
+|---------------|--------|
+| `->lists(100)` | IVF-Flat list count |
+| `->operatorClass('cosine' \| 'l2' \| 'ip')` | Distance: `vector_cosine_ops` (default), `vector_l2_ops`, `vector_ip_ops` |
+| `->hnsw()` | Build HNSW instead (the driver enables `experimental_hnsw_index` for the statement's session) |
+| `->m(16)`, `->efConstruction(64)`, `->efSearch(40)` | HNSW tuning |
 
-Drop it with `$table->dropVectorIndex(['embedding'])`. Vector columns cannot be part of a primary or unique key.
+HNSW example:
+
+```php
+Schema::create('documents', function (Blueprint $table) {
+    $table->bigInteger('id', autoIncrement: true);   // signed BIGINT key, required by HNSW
+    $table->vector('embedding', 768);
+    $table->vectorIndex('embedding')->hnsw()->m(16);
+});
+
+// New rows reach an HNSW index asynchronously; force it after bulk writes:
+DB::statement('alter table documents alter reindex documents_embedding_vectorindex hnsw force_sync');
+```
+
+Drop an index with `$table->dropVectorIndex(['embedding'])`. Vector columns cannot be part of a primary or unique key.
 
 ## Altering tables
 

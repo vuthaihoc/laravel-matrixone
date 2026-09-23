@@ -2,8 +2,8 @@
 
 namespace MatrixOne\Tests\Unit\Schema;
 
+use Illuminate\Database\Schema\Blueprint;
 use InvalidArgumentException;
-use MatrixOne\Schema\Blueprint;
 use MatrixOne\Tests\Unit\TestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
@@ -81,9 +81,30 @@ class GrammarTest extends TestCase
         );
     }
 
+    public function testLaravelsDefaultHnswAlgorithmBuildsIvfFlat(): void
+    {
+        // Laravel's vectorIndex() sets algorithm "hnsw"; MatrixOne's HNSW needs
+        // a signed BIGINT key, so only ->hnsw() opts in.
+        $sql = $this->blueprintSql('docs', fn (Blueprint $table) => $table->vectorIndex('embedding')->algorithm('hnsw'));
+
+        $this->assertStringContainsString('using ivfflat', $sql[0]);
+    }
+
+    public function testUnknownVectorIndexAlgorithmThrows(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        $this->blueprintSql('docs', fn (Blueprint $table) => $table->vectorIndex('embedding')->algorithm('cagra'));
+    }
+
+    public function testVector64IsABlueprintMacro(): void
+    {
+        $this->assertTrue(Blueprint::hasMacro('vector64'));
+    }
+
     public function testHnswVectorIndexEnablesTheExperimentalFeature(): void
     {
-        $sql = $this->blueprintSql('docs', fn (Blueprint $table) => $table->vectorIndex('embedding', 'emb_idx', 'hnsw', 'l2')->m(16)->efConstruction(64));
+        $sql = $this->blueprintSql('docs', fn (Blueprint $table) => $table->vectorIndex('embedding', 'emb_idx')->hnsw()->operatorClass('l2')->m(16)->efConstruction(64));
 
         $this->assertSame([
             'set experimental_hnsw_index = 1',

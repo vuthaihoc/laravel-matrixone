@@ -56,8 +56,8 @@ Connect on `127.0.0.1:6001` as `root` / `111`. See [Running MatrixOne with Docke
 ## Quick start
 
 ```php
-// Migrations: the MatrixOne blueprint adds vector helpers.
-use MatrixOne\Schema\Blueprint;
+// Migrations use Laravel's Blueprint; the driver adds vector macros.
+use Illuminate\Database\Schema\Blueprint;
 
 Schema::create('documents', function (Blueprint $table) {
     $table->id();

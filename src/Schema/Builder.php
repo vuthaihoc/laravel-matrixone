@@ -2,7 +2,6 @@
 
 namespace MatrixOne\Schema;
 
-use Closure;
 use Illuminate\Database\Schema\MySqlBuilder;
 
 /**
@@ -61,19 +60,5 @@ class Builder extends MySqlBuilder
         }
 
         return parent::hasIndex($table, $index, $type);
-    }
-
-    /**
-     * {@inheritDoc}
-     *
-     * Uses the MatrixOne blueprint unless a custom resolver was registered.
-     */
-    protected function createBlueprint($table, ?Closure $callback = null)
-    {
-        // The resolver is typed non-nullable but starts unset at runtime.
-        // @phpstan-ignore isset.property, deadCode.unreachable
-        return isset($this->resolver)
-            ? parent::createBlueprint($table, $callback)
-            : new Blueprint($this->connection, $table, $callback);
     }
 }
