@@ -5,6 +5,7 @@ namespace MatrixOne;
 use Closure;
 use Exception;
 use Illuminate\Database\MySqlConnection;
+use Illuminate\Database\QueryException;
 use Illuminate\Filesystem\Filesystem;
 use InvalidArgumentException;
 use MatrixOne\Connectors\MatrixOneConnector;
@@ -125,6 +126,71 @@ class MatrixOneConnection extends MySqlConnection
     public function query()
     {
         return new QueryBuilder($this, $this->getQueryGrammar(), $this->getPostProcessor());
+    }
+
+    /**
+     * Error messages PDO reports when MatrixOne aborted a statement without
+     * a protocol-level error (a server-side panic). The connection is left
+     * mid-response and cannot run another query.
+     *
+     * @var string[]
+     */
+    protected array $brokenConnectionMessages = [
+        "Error reading result set's header",
+        "Packet buffer wasn't big enough",
+        'Cannot execute queries while other unbuffered queries are active',
+    ];
+
+    /**
+     * {@inheritDoc}
+     *
+     * After a MatrixOne panic the PDO connection is unusable, yet the server
+     * keeps its session, transaction and row locks until the socket closes;
+     * the next write on the same rows then blocks. The broken connection is
+     * dropped (the next query reconnects) and the exception is rethrown:
+     * retrying would crash the server again.
+     *
+     * @param  array<int|string, mixed>  $bindings
+     */
+    protected function handleQueryException(QueryException $e, $query, $bindings, Closure $callback)
+    {
+        if ($this->causedByBrokenConnection($e)) {
+            $this->discardBrokenConnection();
+
+            throw $e;
+        }
+
+        return parent::handleQueryException($e, $query, $bindings, $callback);
+    }
+
+    /**
+     * Determine if the exception left the connection unusable.
+     */
+    protected function causedByBrokenConnection(QueryException $e): bool
+    {
+        $message = ($e->getPrevious() ?? $e)->getMessage();
+
+        foreach ($this->brokenConnectionMessages as $needle) {
+            if (str_contains($message, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Drop a broken connection and forget its open transactions: the server
+     * rolls them back when the session ends.
+     */
+    protected function discardBrokenConnection(): void
+    {
+        $this->disconnect();
+
+        if ($this->transactions > 0) {
+            $this->transactionsManager?->rollback($this->getName() ?? 'matrixone', 0);
+            $this->transactions = 0;
+        }
     }
 
     /** {@inheritDoc} */
