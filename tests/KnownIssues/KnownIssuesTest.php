@@ -275,6 +275,96 @@ class KnownIssuesTest extends TestCase
     }
 
     /**
+     * SILENT WRONG RESULTS: a correlated scalar subquery with LIMIT returns
+     * NULL for most outer rows, e.g. Laravel's
+     * addSelect(['last' => Post::select('title')->whereColumn(...)->latest()->limit(1)]).
+     * Driver workaround: none in general; Pulse's key lookup is rewritten to
+     * max() (MatrixOneConnection::withCompatibilityRewrites()).
+     */
+    public function testCorrelatedScalarSubqueryWithLimit(): void
+    {
+        $rows = $this->runSql(
+            'create table cl_users (id int primary key)',
+            'create table cl_posts (id int primary key, user_id int, title varchar(20), created int)',
+            'insert into cl_users values (1), (2)',
+            "insert into cl_posts values (1, 1, 'a-old', 1), (2, 1, 'a-new', 2), (3, 2, 'b-old', 5), (4, 2, 'b-new', 9)",
+            'select cl_users.id, (select title from cl_posts where cl_posts.user_id = cl_users.id order by created desc limit 1) as last '
+            .'from cl_users order by cl_users.id',
+        );
+
+        $this->assertSame([['id' => 1, 'last' => 'a-new'], ['id' => 2, 'last' => 'b-new']], $rows);
+    }
+
+    /**
+     * A bare NULL in a UNION is typed VARCHAR, so sum()/avg() over the union
+     * fail ("aggregate function sum, bad value [VARCHAR]").
+     * Driver workaround: Pulse's queries use `cast(null as double)` placeholders.
+     */
+    public function testNullPlaceholderInUnion(): void
+    {
+        $rows = $this->runSql(
+            'create table un_values (v bigint)',
+            'insert into un_values values (5)',
+            'select sum(x) as total from ((select sum(v) as x from un_values) union all (select null as x from un_values)) t',
+        );
+
+        $this->assertSame(5, (int) $rows[0]['total']);
+    }
+
+    /**
+     * DELETE reports rows removed by ON DELETE CASCADE in its affected rows;
+     * MySQL only counts the rows deleted by the statement.
+     * Driver workaround: none (only returned counts differ).
+     */
+    public function testAffectedRowsExcludeCascadedDeletes(): void
+    {
+        $this->runSql(
+            'create table ar_parents (id int primary key)',
+            'create table ar_children (id int primary key, parent_id int)',
+            'alter table ar_children add constraint ar_children_parent_foreign foreign key (parent_id) references ar_parents (id) on delete cascade',
+            'insert into ar_parents values (1)',
+            'insert into ar_children values (1, 1), (2, 1)',
+        );
+
+        $this->assertSame(1, self::connect()->exec('delete from ar_parents where id = 1'));
+    }
+
+    /**
+     * Natural language mode does not match documents containing only some of
+     * the words (or the words apart); MySQL matches any word, by relevance.
+     * Driver workaround: the Scout engine and FullTextQuery::anyOf() use
+     * boolean mode without operators.
+     */
+    public function testNaturalLanguageModeMatchesAnyWord(): void
+    {
+        $rows = $this->runSql(
+            'create table nl_docs (id int primary key, body text)',
+            "insert into nl_docs values (1, 'python data science tools'), (2, 'guitar chords')",
+            'alter table nl_docs add fulltext nl_docs_body_fulltext(body)',
+            "select id from nl_docs where match(body) against('python science' in natural language mode) order by id",
+        );
+
+        $this->assertSame([['id' => 1]], $rows);
+    }
+
+    /**
+     * A boolean-mode phrase is only honoured as the whole query: with a
+     * leading `+` or next to other terms its words match individually.
+     * Driver workaround: none; FullTextQuery::phrase() documents it.
+     */
+    public function testPhraseCombinedWithOtherTerms(): void
+    {
+        $rows = $this->runSql(
+            'create table ph_docs (id int primary key, body text)',
+            "insert into ph_docs values (1, 'deep learning uses neural networks'), (2, 'deep networks of neural cells')",
+            'alter table ph_docs add fulltext ph_docs_body_fulltext(body)',
+            "select id from ph_docs where match(body) against('+deep +\"neural networks\"' in boolean mode) order by id",
+        );
+
+        $this->assertSame([['id' => 1]], $rows);
+    }
+
+    /**
      * Full-text query expansion.
      * Driver workaround: whereFullText(..., ['expanded' => true]) throws.
      */
