@@ -3,6 +3,7 @@
 namespace MatrixOne\Query;
 
 use Illuminate\Database\Query\Builder;
+use Illuminate\Database\Query\Expression;
 use Illuminate\Database\Query\Grammars\MySqlGrammar;
 use Illuminate\Database\Query\JoinLateralClause;
 use Illuminate\Support\Collection;
@@ -259,8 +260,27 @@ class Grammar extends MySqlGrammar
     protected function whereBasic(Builder $query, $where)
     {
         $where['operator'] = $this->caseInsensitiveLike($where['operator']);
+        $where['column'] = $this->textColumnForIlike($where['operator'], $where['column']);
 
         return parent::whereBasic($query, $where);
+    }
+
+    /**
+     * MatrixOne's ILIKE only accepts string operands (MySQL's LIKE also
+     * matches numbers, dates and JSON), so the column is cast to text.
+     * `cast(... as char)` would truncate values after 65,535 characters.
+     */
+    protected function textColumnForIlike(mixed $operator, mixed $column): mixed
+    {
+        if (! is_string($operator) || ! in_array(strtolower($operator), ['ilike', 'not ilike'], true)) {
+            return $column;
+        }
+
+        if (! is_string($column) && ! $column instanceof \Illuminate\Contracts\Database\Query\Expression) {
+            return $column;
+        }
+
+        return new Expression('cast('.$this->wrap($column).' as text)');
     }
 
     /**
@@ -272,6 +292,10 @@ class Grammar extends MySqlGrammar
     {
         if (isset($having['operator'])) {
             $having['operator'] = $this->caseInsensitiveLike($having['operator']);
+
+            if (($having['type'] ?? null) === 'Basic') {
+                $having['column'] = $this->textColumnForIlike($having['operator'], $having['column']);
+            }
         }
 
         return parent::compileHaving($having);

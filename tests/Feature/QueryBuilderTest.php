@@ -134,6 +134,21 @@ class QueryBuilderTest extends TestCase
         $this->assertSame(2, DB::table('qb_users')->where('email', 'not like', 'ALICE%')->count());
     }
 
+    public function testLikeOnNonStringColumnsAndLongText(): void
+    {
+        $this->seedUsers();
+        $id = DB::table('qb_users')->where('name', 'bob')->value('id');
+
+        // MySQL's LIKE matches numbers and dates; MatrixOne's ILIKE needs text.
+        $this->assertSame(1, DB::table('qb_users')->where('id', 'like', "%{$id}%")->count());
+        $this->assertSame(2, DB::table('qb_users')->where('votes', 'like', '5')->count());
+        $this->assertSame(2, DB::table('qb_users')->whereLike('created_at', '2024-%')->count());
+        $this->assertSame(1, DB::table('qb_users')->whereLike('id', (string) $id, caseSensitive: true)->count());
+
+        DB::table('qb_posts')->insert(['user_id' => $id, 'title' => 't', 'body' => str_repeat('x', 70000).'Needle']);
+        $this->assertSame(1, DB::table('qb_posts')->whereLike('body', '%needle')->count());
+    }
+
     public function testDateBasedWheres(): void
     {
         $this->seedUsers();

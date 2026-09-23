@@ -173,7 +173,7 @@ class GrammarTest extends TestCase
     public function testLikeIsCaseInsensitiveUnlessBinary(): void
     {
         $this->assertSame(
-            'select * from `users` where `name` ilike ? and `name` not ilike ? and `name` like binary ? and `name` not like binary ? and `name` like binary ? having `name` ilike ?',
+            'select * from `users` where cast(`name` as text) ilike ? and cast(`name` as text) not ilike ? and `name` like binary ? and `name` not like binary ? and `name` like binary ? having cast(`name` as text) ilike ?',
             $this->query()->from('users')
                 ->where('name', 'like', 'a%')
                 ->where('name', 'not like', 'b%')
@@ -183,7 +183,11 @@ class GrammarTest extends TestCase
                 ->having('name', 'like', 'f%')
                 ->toSql()
         );
-        $this->assertSame('select * from `users` where `name` ilike ?', $this->query()->from('users')->whereLike('name', 'a%')->toSql());
+        $this->assertSame('select * from `users` where cast(`name` as text) ilike ?', $this->query()->from('users')->whereLike('name', 'a%')->toSql());
+        $this->assertSame(
+            'select * from `posts` where cast(json_unquote(json_extract(`meta`, \'$."a"\')) as text) ilike ?',
+            $this->query()->from('posts')->where('meta->a', 'like', 'x%')->toSql()
+        );
     }
 
     public function testJsonOverlapsPassesTwoDocuments(): void
