@@ -37,6 +37,8 @@ Local runs may use a gitignored `phpunit.xml` (copied from `phpunit.xml.dist`) t
 - An unconditional `DELETE` with `foreign_key_checks = 0` corrupts FK metadata — keep the `where 1 = 1` safeguard.
 - 4.2.4: inserting into a table with both a foreign key and a FULLTEXT index panics.
 - `LAST_INSERT_ID()` is wrong on tables with a FULLTEXT index; `insertGetId()` must keep using `insert ... returning`.
+- Every `SET` assignment of an UPDATE reads the original row: never emit two assignments to one column (JSON path updates are merged into one `json_set()`).
+- `LIKE` and `=` ignore `_ci` collations; the grammar maps `like` to `ilike`, `=` stays case-sensitive.
 - JSON columns accept neither defaults nor indexes; the grammar throws unless `ignore_json_defaults` / `ignore_json_indexes` is set.
 
 ## Code Comments Language

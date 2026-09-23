@@ -13,6 +13,8 @@ MatrixOne speaks the MySQL 8.0 protocol but implements a subset of MySQL. This p
 | No `performance_schema` | `threadCount()` counts `information_schema.processlist` |
 | No savepoints | Nested transactions are flattened (see [Eloquent › Transactions](./eloquent#transactions)) |
 | `json_overlaps()` takes exactly two documents | The JSON path is applied with `json_extract()` |
+| `SET` assignments all read the original row | JSON path updates of one column share one `json_set()` |
+| `LIKE` ignores `_ci` collations | `like` / `whereLike()` compile to `ilike` |
 | `LAST_INSERT_ID()` is wrong on tables with a FULLTEXT index | `insertGetId()` uses `insert ... returning` |
 | Identifiers are limited to 64 characters | Long index names are shortened consistently |
 | JSON booleans cannot be compared with SQL `true` | Compared as unquoted text |
@@ -40,6 +42,7 @@ MatrixOne speaks the MySQL 8.0 protocol but implements a subset of MySQL. This p
 
 ## Known MatrixOne issues
 
+- `=` compares strings case-sensitively even on `_ci` collations; the driver cannot change this without losing index use.
 - **4.2.4:** inserting into a table with both a foreign key and a FULLTEXT index panics in the query planner. Keep full-text indexes on tables without their own foreign keys.
 - **FULLTEXT2** indexes (4.2.2+) are experimental and are not indexed synchronously; the driver does not use them.
 - **HNSW** vector indexes are experimental; the driver enables them for the creating session only.

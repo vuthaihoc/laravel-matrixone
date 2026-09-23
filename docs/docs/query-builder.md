@@ -27,17 +27,41 @@
 MatrixOne returns boolean expressions such as `select a = b` as the strings `"true"` and `"false"`. In PHP `(bool) "false"` is `true`. The driver handles this for its own queries; in raw SQL wrap such expressions with `if(expr, 1, 0)`.
 :::
 
+## String comparisons and LIKE
+
+MatrixOne ignores case-insensitive collations such as `utf8mb4_unicode_ci`: both `=` and `LIKE` compare case-sensitively. The driver restores MySQL's behaviour for LIKE:
+
+| Query | Compiled to |
+|-------|-------------|
+| `where('name', 'like', 'a%')`, `whereLike('name', 'a%')` | `name ilike ?` |
+| `where('name', 'not like', 'a%')`, `whereNotLike(...)` | `name not ilike ?` |
+| `whereLike('name', 'A%', caseSensitive: true)`, `where('name', 'like binary', ...)` | `name like binary ?` |
+
+::: warning Equality is case-sensitive
+`where('email', 'Alice@example.com')` does **not** match `alice@example.com` on MatrixOne, while it does on MySQL with a `_ci` collation. The driver does not rewrite `=` because wrapping columns in `lower()` would prevent index use. Normalize such values when writing them (for example lower-case e-mails in a mutator) or compare with `whereLike()`.
+:::
+
 ## JSON columns
 
-| Method | Supported |
-|--------|-----------|
-| `where('meta->a->b', ...)`, `select('meta->a')`, `orderBy('meta->a')` | ✓ |
-| `where('meta->flag', true)` | ✓ |
-| `update(['meta->a' => 1])` | ✓ |
-| `whereJsonContainsKey()` / `whereJsonDoesntContainKey()` | ✓ |
-| `whereJsonContains()` / `whereJsonDoesntContain()` | ✓ |
-| `whereJsonLength()` | ✓ |
-| `whereJsonOverlaps()` | ✓ (compiled as `json_overlaps(json_extract(col, path), value)`) |
+Every JSON method of Laravel's MySQL grammar works, verified against MatrixOne 4.2.4:
+
+| Method | Notes |
+|--------|-------|
+| `where('meta->a->b', ...)` with strings, numbers and `!=`, `>`... | Paths may use array indexes: `meta->list[1]->id` |
+| `where('meta->flag', true)` | JSON booleans are compared as `'true'` / `'false'` text |
+| `whereNull('meta->a')` / `whereNotNull('meta->a')` | A missing key, a JSON `null` and a SQL `NULL` document count as null |
+| `whereIn()`, `whereBetween()`, `whereLike()` on JSON paths | |
+| `whereJsonContains()` / `whereJsonDoesntContain()` | Scalars, arrays and objects |
+| `whereJsonOverlaps()` / `whereJsonDoesntOverlap()` | Compiled as `json_overlaps(json_extract(col, path), value)` |
+| `whereJsonContainsKey()` / `whereJsonDoesntContainKey()` | |
+| `whereJsonLength()` | |
+| `select('meta->a as a')`, `orderBy('meta->a')`, `groupBy('meta->a')` | |
+| `update(['meta->a' => $value, 'meta->b' => $value])` | See below |
+| Eloquent `array`, `json`, `AsArrayObject`, `AsCollection` casts and `$model->update(['meta->a' => 1])` | |
+
+Updates of several paths of the same column are merged into one `json_set(meta, path1, value1, path2, value2, ...)`. MatrixOne evaluates every `SET` assignment against the original row, so Laravel's usual `meta = json_set(...), meta = json_set(...)` would keep only the last change. Booleans are written as JSON booleans, arrays as JSON documents, and floats as JSON numbers (MySQL through PDO stores them as strings).
+
+`pluck('meta->a')` needs an alias (`pluck('meta->a as a')`), as on MySQL.
 
 The `->` and `->>` operators also work in raw SQL; MatrixOne rewrites them to `json_extract()` and `json_unquote(json_extract())`.
 
