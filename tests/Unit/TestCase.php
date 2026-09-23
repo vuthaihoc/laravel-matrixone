@@ -13,11 +13,14 @@ abstract class TestCase extends BaseTestCase
     /**
      * A connection whose PDO must never be touched: unit tests only compile SQL.
      */
-    protected function connection(): MatrixOneConnection
+    /**
+     * @param  array<string, mixed>  $config
+     */
+    protected function connection(array $config = []): MatrixOneConnection
     {
         return new MatrixOneConnection(function () {
             throw new LogicException('Unit tests must not open a database connection.');
-        }, 'test', '', ['driver' => 'matrixone', 'name' => 'matrixone']);
+        }, 'test', '', array_merge(['driver' => 'matrixone', 'name' => 'matrixone'], $config));
     }
 
     protected function query(): Builder
@@ -44,6 +47,13 @@ abstract class TestCase extends BaseTestCase
 
         $callback($blueprint);
 
-        return $blueprint->toSql();
+        // Pretending makes catalog lookups (e.g. existing column types)
+        // return no rows instead of touching the database.
+        $sql = [];
+        $connection->pretend(function () use ($blueprint, &$sql) {
+            $sql = $blueprint->toSql();
+        });
+
+        return $sql;
     }
 }

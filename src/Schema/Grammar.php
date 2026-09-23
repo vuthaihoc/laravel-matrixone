@@ -181,7 +181,7 @@ class Grammar extends MySqlGrammar
     {
         $indexes = $this->connection->getSchemaBuilder()->getIndexes($blueprint->getTable());
 
-        $index = collect($indexes)->firstWhere('name', strtolower((string) $command->from));
+        $index = collect($indexes)->firstWhere('name', strtolower($this->shortenIndexName((string) $command->from)));
 
         if (! is_array($index)) {
             throw new RuntimeException("Index [{$command->from}] does not exist on table [{$blueprint->getTable()}].");
@@ -197,10 +197,10 @@ class Grammar extends MySqlGrammar
             default => 'index',
         };
 
-        return [
+        return array_values(array_filter([
             $this->compileDropIndex($blueprint, new Fluent(['index' => $command->from])),
             $this->compileKey($blueprint, new Fluent(['index' => $command->to, 'columns' => $index['columns']]), $type),
-        ];
+        ]));
     }
 
     /**
@@ -208,17 +208,51 @@ class Grammar extends MySqlGrammar
      *
      * MatrixOne rejects `USING <algorithm>` and online DDL options on regular
      * indexes, so they are omitted. A full-text index may name a parser,
-     * e.g. `$table->fullText('body')->parser('ngram')`.
+     * e.g. `$table->fullText('body')->parser('ngram')`. Index names longer
+     * than 64 characters are shortened, and JSON columns cannot be indexed.
+     *
+     * @return string|null
+     *
+     * @phpstan-ignore method.childReturnType
      */
     protected function compileKey(Blueprint $blueprint, Fluent $command, $type)
     {
+        if (in_array($type, ['index', 'unique'], true)
+            && ($jsonColumns = $this->jsonColumnsIn($blueprint, (array) $command->columns)) !== []) {
+            if ($this->connection->getConfig('ignore_json_indexes')) {
+                return null;
+            }
+
+            throw new RuntimeException(sprintf(
+                'MatrixOne cannot index JSON columns [%s] on table [%s]. Drop the index, or set "ignore_json_indexes" on the connection to skip such indexes.',
+                implode(', ', $jsonColumns),
+                $blueprint->getTable()
+            ));
+        }
+
         return sprintf('alter table %s add %s %s(%s)%s',
             $this->wrapTable($blueprint),
             $type,
-            $this->wrap($command->index),
+            $this->wrap($this->shortenIndexName((string) $command->index)),
             $this->columnize($command->columns),
             $type === 'fulltext' && $command->parser ? ' with parser '.$this->parserName($command->parser) : ''
         );
+    }
+
+    /**
+     * Shorten an index name to MatrixOne's 64-character identifier limit.
+     *
+     * Long names keep a readable prefix plus a hash of the full name, so the
+     * same Laravel-generated name always maps to the same index when it is
+     * created, dropped, renamed or looked up.
+     */
+    public function shortenIndexName(string $name): string
+    {
+        if (strlen($name) <= 64) {
+            return $name;
+        }
+
+        return substr($name, 0, 56).'_'.substr(md5($name), 0, 7);
     }
 
     /**
@@ -250,8 +284,10 @@ class Grammar extends MySqlGrammar
 
         $options[] = 'op_type '.$this->quoteString($this->vectorOperatorClass($command->operatorClass));
 
+        $index = $this->shortenIndexName((string) $command->index);
+
         $sql = sprintf('create index %s using %s on %s (%s) %s',
-            $this->wrap($command->index),
+            $this->wrap($index),
             $algorithm,
             $this->wrapTable($blueprint),
             $this->columnize($command->columns),
@@ -265,7 +301,15 @@ class Grammar extends MySqlGrammar
     /** {@inheritDoc} */
     public function compileDropIndex(Blueprint $blueprint, Fluent $command)
     {
-        return "alter table {$this->wrapTable($blueprint)} drop index {$this->wrap($command->index)}";
+        $index = $this->shortenIndexName((string) $command->index);
+
+        return "alter table {$this->wrapTable($blueprint)} drop index {$this->wrap($index)}";
+    }
+
+    /** {@inheritDoc} */
+    public function compileDropUnique(Blueprint $blueprint, Fluent $command)
+    {
+        return $this->compileDropIndex($blueprint, $command);
     }
 
     /**
@@ -341,6 +385,42 @@ class Grammar extends MySqlGrammar
         return 'vecf64('.$this->vectorDimensions($column).')';
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * MatrixOne rejects any default value on a JSON column.
+     */
+    protected function modifyDefault(Blueprint $blueprint, Fluent $column)
+    {
+        if ($this->isJsonColumn($column) && ! is_null($column->default)) {
+            if ($this->connection->getConfig('ignore_json_defaults')) {
+                return null;
+            }
+
+            throw new RuntimeException(sprintf(
+                'MatrixOne does not support default values on JSON column [%s]. Remove the default, or set "ignore_json_defaults" on the connection to drop it (the column then becomes nullable).',
+                $column->name
+            ));
+        }
+
+        return parent::modifyDefault($blueprint, $column);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * When a JSON default is dropped (`ignore_json_defaults`), the column is
+     * made nullable so inserts that relied on the default keep working.
+     */
+    protected function modifyNullable(Blueprint $blueprint, Fluent $column)
+    {
+        if ($this->isJsonColumn($column) && ! is_null($column->default) && $this->connection->getConfig('ignore_json_defaults')) {
+            return ' null';
+        }
+
+        return parent::modifyNullable($blueprint, $column);
+    }
+
     /** {@inheritDoc} */
     protected function modifyVirtualAs(Blueprint $blueprint, Fluent $column)
     {
@@ -359,6 +439,46 @@ class Grammar extends MySqlGrammar
         }
 
         return null;
+    }
+
+    /**
+     * Determine if the column definition is a JSON column.
+     */
+    protected function isJsonColumn(Fluent $column): bool
+    {
+        return in_array($column->type, ['json', 'jsonb'], true);
+    }
+
+    /**
+     * Get the JSON columns among the given index columns, looking at the
+     * columns added by the blueprint and, for existing tables, the catalog.
+     *
+     * @param  array<int, mixed>  $columns
+     * @return string[]
+     */
+    protected function jsonColumnsIn(Blueprint $blueprint, array $columns): array
+    {
+        $columns = array_values(array_filter($columns, 'is_string'));
+
+        if ($columns === []) {
+            return [];
+        }
+
+        $types = [];
+
+        foreach ($blueprint->getColumns() as $column) {
+            $types[(string) $column->name] = $this->isJsonColumn($column);
+        }
+
+        $unknown = array_diff($columns, array_keys($types));
+
+        if ($unknown !== [] && ! $this->creatingTable($blueprint)) {
+            foreach ($this->connection->getSchemaBuilder()->getColumns($blueprint->getTable()) as $column) {
+                $types[$column['name']] ??= $column['type_name'] === 'json';
+            }
+        }
+
+        return array_values(array_filter($columns, fn ($column) => $types[$column] ?? false));
     }
 
     /**

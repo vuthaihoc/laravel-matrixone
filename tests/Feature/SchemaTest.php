@@ -246,6 +246,85 @@ class SchemaTest extends TestCase
         $this->assertSame([], Schema::getTableListing(DB::getDatabaseName()));
     }
 
+    public function testJsonDefaultsAreRejectedUnlessIgnored(): void
+    {
+        try {
+            Schema::create('sc_json', fn (Blueprint $table) => $table->json('context')->default('{}'));
+            $this->fail('A JSON default should be rejected.');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('ignore_json_defaults', $e->getMessage());
+        }
+
+        $this->assertFalse(Schema::hasTable('sc_json'));
+
+        config(['database.connections.lenient' => array_merge(config('database.connections.matrixone'), ['ignore_json_defaults' => true])]);
+
+        Schema::connection('lenient')->create('sc_json', function (Blueprint $table) {
+            $table->id();
+            $table->json('context')->default('{}');
+        });
+
+        $column = collect(Schema::getColumns('sc_json'))->firstWhere('name', 'context');
+        $this->assertTrue($column['nullable']);
+        $this->assertNull($column['default']);
+
+        DB::table('sc_json')->insert(['id' => 1]);
+        $this->assertNull(DB::table('sc_json')->value('context'));
+    }
+
+    public function testJsonIndexesAreRejectedUnlessIgnored(): void
+    {
+        Schema::create('sc_json_idx', function (Blueprint $table) {
+            $table->id();
+            $table->json('meta');
+        });
+
+        // The column already exists, so it is detected through the catalog.
+        try {
+            Schema::table('sc_json_idx', fn (Blueprint $table) => $table->index('meta')->algorithm('GIN'));
+            $this->fail('An index on a JSON column should be rejected.');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('JSON columns [meta]', $e->getMessage());
+        }
+
+        config(['database.connections.lenient' => array_merge(config('database.connections.matrixone'), ['ignore_json_indexes' => true])]);
+
+        Schema::connection('lenient')->table('sc_json_idx', function (Blueprint $table) {
+            $table->index('meta');
+            $table->index('id', 'sc_json_idx_id_index');
+        });
+
+        $this->assertSame(['primary', 'sc_json_idx_id_index'], collect(Schema::getIndexes('sc_json_idx'))->pluck('name')->sort()->values()->all());
+    }
+
+    public function testLongIndexNamesAreShortened(): void
+    {
+        Schema::create('sc_a_table_with_a_rather_long_name_for_testing', function (Blueprint $table) {
+            $table->id();
+            $table->string('some_fairly_long_column_name');
+            $table->string('another_fairly_long_column_name');
+            $table->index(['some_fairly_long_column_name', 'another_fairly_long_column_name']);
+            $table->unique('another_fairly_long_column_name');
+        });
+
+        $table = 'sc_a_table_with_a_rather_long_name_for_testing';
+        $long = $table.'_some_fairly_long_column_name_another_fairly_long_column_name_index';
+
+        $this->assertGreaterThan(64, strlen($long));
+        $this->assertTrue(Schema::hasIndex($table, $long));
+        $this->assertTrue(Schema::hasIndex($table, ['some_fairly_long_column_name', 'another_fairly_long_column_name']));
+
+        Schema::table($table, fn (Blueprint $blueprint) => $blueprint->renameIndex($long, 'sc_short_index'));
+        $this->assertTrue(Schema::hasIndex($table, 'sc_short_index'));
+
+        Schema::table($table, function (Blueprint $blueprint) {
+            $blueprint->dropIndex('sc_short_index');
+            $blueprint->dropUnique(['another_fairly_long_column_name']);
+        });
+
+        $this->assertSame(['primary'], collect(Schema::getIndexes($table))->pluck('name')->all());
+    }
+
     public function testUnsupportedColumnTypesThrowBeforeTouchingTheDatabase(): void
     {
         $this->expectException(RuntimeException::class);

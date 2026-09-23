@@ -135,6 +135,75 @@ class GrammarTest extends TestCase
         $this->blueprintSql('things', $callback);
     }
 
+    public function testJsonDefaultsThrowByDefault(): void
+    {
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('ignore_json_defaults');
+
+        $this->blueprintSql('reports', fn (Blueprint $table) => $table->json('context')->default('{}'), create: true);
+    }
+
+    public function testJsonDefaultsCanBeDroppedOnRequest(): void
+    {
+        $sql = $this->blueprintSql('reports', function (Blueprint $table) {
+            $table->json('context')->default('{}');
+            $table->jsonb('flags')->nullable();
+            $table->string('status')->default('open');
+        }, create: true, connection: $this->connection(['ignore_json_defaults' => true]));
+
+        $this->assertStringContainsString('`context` json null,', $sql[0]);
+        $this->assertStringContainsString('`flags` json null,', $sql[0]);
+        $this->assertStringContainsString("`status` varchar(255) not null default 'open'", $sql[0]);
+    }
+
+    public function testJsonIndexesThrowByDefault(): void
+    {
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('JSON columns [context]');
+
+        $this->blueprintSql('reports', function (Blueprint $table) {
+            $table->json('context');
+            $table->index('context');
+        }, create: true);
+    }
+
+    public function testJsonIndexesCanBeSkippedOnRequest(): void
+    {
+        $sql = $this->blueprintSql('reports', function (Blueprint $table) {
+            $table->id();
+            $table->json('context');
+            $table->index('context')->algorithm('GIN');
+            $table->unique(['context']);
+            $table->index('id', 'reports_id_index')->algorithm('GIN');
+        }, create: true, connection: $this->connection(['ignore_json_indexes' => true]));
+
+        $this->assertCount(2, $sql);
+        $this->assertSame('alter table `reports` add index `reports_id_index`(`id`)', $sql[1]);
+    }
+
+    public function testLongIndexNamesAreShortenedConsistently(): void
+    {
+        $name = str_repeat('a', 30).'_'.str_repeat('b', 30).'_idx_long_suffix';
+        $short = substr($name, 0, 56).'_'.substr(md5($name), 0, 7);
+
+        $sql = $this->blueprintSql('t', function (Blueprint $table) use ($name) {
+            $table->index('x', $name);
+            $table->unique('y', $name.'_u');
+            $table->dropIndex($name);
+            $table->dropUnique($name);
+        });
+
+        $this->assertSame(64, strlen($short));
+        $this->assertSame("alter table `t` add index `{$short}`(`x`)", $sql[0]);
+        $this->assertStringNotContainsString($name, $sql[1]);
+        $this->assertSame("alter table `t` drop index `{$short}`", $sql[2]);
+        $this->assertSame("alter table `t` drop index `{$short}`", $sql[3]);
+
+        $connection = $this->connection();
+        $connection->useDefaultSchemaGrammar();
+        $this->assertSame('short_name', $connection->getSchemaGrammar()->shortenIndexName('short_name'));
+    }
+
     public function testIntrospectionQueriesExcludeHiddenColumnsAndSystemSchemas(): void
     {
         $connection = $this->connection();

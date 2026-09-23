@@ -47,6 +47,25 @@ class Builder extends MySqlBuilder
     /**
      * {@inheritDoc}
      *
+     * Index names longer than 64 characters are shortened when the index is
+     * created, so the same shortening is applied before comparing names.
+     *
+     * @param  string  $table
+     * @param  string|string[]  $index
+     * @param  string|null  $type
+     */
+    public function hasIndex($table, $index, $type = null)
+    {
+        if (is_string($index)) {
+            $index = $this->grammar->shortenIndexName($index);
+        }
+
+        return parent::hasIndex($table, $index, $type);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
      * Uses the MatrixOne blueprint unless a custom resolver was registered.
      */
     protected function createBlueprint($table, ?Closure $callback = null)
