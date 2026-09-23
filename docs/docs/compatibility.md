@@ -8,6 +8,8 @@ MatrixOne speaks the MySQL 8.0 protocol but implements a subset of MySQL. This p
 |---------------------|----------------------|
 | Boolean expressions return `"true"`/`"false"` strings | `exists()`, `hasTable()`, index `unique` and schema `default` flags are computed as integers |
 | No `insert ... as alias` row alias | `upsert()` uses `values(col)` |
+| Assigning a primary key `on duplicate key` is rejected | `upsert()` never updates its `uniqueBy` columns (Laravel's database cache upserts every column) |
+| No `skip locked` / `nowait` | Dropped from lock clauses; the database queue's `FOR UPDATE SKIP LOCKED` becomes `for update` |
 | No `lock in share mode` / `for share` | Shared locks become `for update` |
 | `RAND()` accepts no seed | The seed is dropped |
 | No `performance_schema` | `threadCount()` counts `information_schema.processlist` |

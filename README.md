@@ -7,6 +7,7 @@ A [MatrixOne](https://github.com/matrixorigin/matrixone) database driver for Lar
 - **`matrixone` driver** built on Laravel's MySQL stack — read/write splitting, reconnects and lazy connections work like a built-in driver
 - **Eloquent & Query Builder** — relationships, eager loading, soft deletes, upserts, JSON columns, full-text search, pagination
 - **Schema Builder & migrations** — `migrate`, `migrate:fresh`, `db:wipe`, `db:show` and schema introspection adapted to MatrixOne's catalog
+- **Cache, queue and session** — Laravel's `database` cache, lock, queue (batches, failed jobs) and session drivers work
 - **Real transactions** — `RefreshDatabase`, `DatabaseTransactions` and `DatabaseTruncation` work unchanged
 - **Vector search** — `vecf32` / `vecf64` columns, IVF-Flat and HNSW indexes, an `AsVector` cast and nearest-neighbour queries
 - **MatrixOne-aware** — works around MatrixOne quirks and fails clearly on unsupported features

@@ -81,3 +81,18 @@ docker run -d -p 6001:6001 --name matrixone matrixorigin/matrixone:4.2.4
 ```
 
 The default account is `root` with password `111`. See [Running MatrixOne with Docker](./docker) for a persistent standalone setup and for storing data on S3.
+
+## Cache, queue and sessions
+
+Laravel's `database` drivers work on MatrixOne with the tables created by the application skeleton (`cache`, `cache_locks`, `jobs`, `job_batches`, `failed_jobs`, `sessions`):
+
+```dotenv
+DB_CONNECTION=matrixone
+CACHE_STORE=database
+QUEUE_CONNECTION=database
+SESSION_DRIVER=database
+```
+
+Covered by the test suite: cache reads/writes, expiration, `add()`, `increment()`, locks, the rate limiter, queued, delayed and released jobs, failed jobs and `queue:retry`, job batches, and sessions.
+
+MatrixOne has no `SKIP LOCKED`, so queue workers popping jobs at the same time wait for each other instead of skipping locked rows. Jobs are never run twice, but many concurrent workers on one queue scale worse than on MySQL 8.

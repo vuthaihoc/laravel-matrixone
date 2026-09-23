@@ -124,6 +124,10 @@ DB::connection('matrixone')->withSessionVariables(['experimental_fulltext2_index
 
 Useful variables: `ft_relevancy_algorithm` (`TF-IDF`/`BM25`, typos are accepted silently), `fulltext_bloom_filter_pushdown`, `experimental_fulltext2_index`, `experimental_hnsw_index`. `ngram_token_size` is global only.
 
+## Cache, queue and sessions
+
+`CACHE_STORE=database`, `QUEUE_CONNECTION=database` and `SESSION_DRIVER=database` work with the skeleton tables. There is no `SKIP LOCKED`: concurrent queue workers serialize when popping jobs, so prefer a few workers per queue (or Redis for high-throughput queues).
+
 ## Transactions and tests
 
 - Transactions work; savepoints do not. Nested `DB::transaction()` calls are flattened: an inner rollback does not undo the inner writes, only the outermost rollback does. Do not design code that relies on partial rollbacks.

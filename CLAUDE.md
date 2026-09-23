@@ -43,6 +43,8 @@ Local runs may use a gitignored `phpunit.xml` (copied from `phpunit.xml.dist`) t
 - 4.2.4: a correlated `count(*)` with an extra predicate, selected by a single primary key (`loadCount()` on one soft-deletable model), panics and leaves the connection mid-response. Tests that trigger it must not share a connection with later tests.
 - `LAST_INSERT_ID()` is wrong on tables with a FULLTEXT index; `insertGetId()` must keep using `insert ... returning`.
 - Every `SET` assignment of an UPDATE reads the original row: never emit two assignments to one column (JSON path updates are merged into one `json_set()`).
+- `on duplicate key update` may not assign the primary key: `compileUpsert()` drops `uniqueBy` columns from the update list (the database cache store depends on it).
+- No `skip locked` / `nowait`: `compileLock()` strips them (the database queue uses `FOR UPDATE SKIP LOCKED`).
 - `LIKE` and `=` ignore `_ci` collations; the grammar maps `like` to `ilike`, `=` stays case-sensitive.
 - JSON columns accept neither defaults nor indexes; the grammar throws unless `ignore_json_defaults` / `ignore_json_indexes` is set.
 
