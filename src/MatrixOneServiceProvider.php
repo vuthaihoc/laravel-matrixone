@@ -3,10 +3,12 @@
 namespace MatrixOne;
 
 use Illuminate\Database\Connection;
+use Illuminate\Database\Console\DbCommand as BaseDbCommand;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Schema\ColumnDefinition;
 use Illuminate\Support\ServiceProvider;
 use MatrixOne\Connectors\MatrixOneConnector;
+use MatrixOne\Console\DbCommand;
 
 class MatrixOneServiceProvider extends ServiceProvider
 {
@@ -27,6 +29,9 @@ class MatrixOneServiceProvider extends ServiceProvider
         });
 
         static::registerBlueprintMacros();
+
+        // `php artisan db` only knows Laravel's built-in drivers.
+        $this->app->extend(BaseDbCommand::class, fn ($command, $app) => $app->make(DbCommand::class));
     }
 
     /**

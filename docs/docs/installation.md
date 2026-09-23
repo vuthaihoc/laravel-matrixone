@@ -82,6 +82,16 @@ docker run -d -p 6001:6001 --name matrixone matrixorigin/matrixone:4.2.4
 
 The default account is `root` with password `111`. See [Running MatrixOne with Docker](./docker) for a persistent standalone setup and for storing data on S3.
 
+## Command line
+
+`php artisan db` opens the `mysql` client on a MatrixOne connection (MatrixOne speaks the MySQL protocol), so the `mysql` client must be installed:
+
+```bash
+php artisan db matrixone
+```
+
+`db:show`, `db:table`, `db:wipe`, `db:monitor` and the `migrate:*` commands work as with MySQL. `schema:dump` is not supported yet.
+
 ## Cache, queue and sessions
 
 Laravel's `database` drivers work on MatrixOne with the tables created by the application skeleton (`cache`, `cache_locks`, `jobs`, `job_batches`, `failed_jobs`, `sessions`):
