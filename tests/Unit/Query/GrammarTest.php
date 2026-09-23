@@ -159,6 +159,43 @@ class GrammarTest extends TestCase
         );
     }
 
+    public function testFullTextQueryExpansionThrows(): void
+    {
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('query expansion');
+
+        $this->query()->from('posts')->whereFullText('title', 'db', ['expanded' => true])->toSql();
+    }
+
+    public function testFullTextQueryExpansionIsIgnoredInBooleanModeLikeLaravel(): void
+    {
+        $this->assertSame(
+            'select * from `posts` where match (`title`) against (? in boolean mode)',
+            $this->query()->from('posts')->whereFullText('title', 'db', ['mode' => 'boolean', 'expanded' => true])->toSql()
+        );
+    }
+
+    public function testFullTextRelevanceHelpers(): void
+    {
+        $query = $this->query()->from('posts')
+            ->select('id')
+            ->selectFullTextRelevance(['title', 'body'], 'db', 'score', ['mode' => 'boolean'])
+            ->searchFullText('title', 'sql');
+
+        $this->assertSame(
+            'select `id`, match (`title`, `body`) against (? in boolean mode) as `score` from `posts` '
+            .'where match (`title`) against (? in natural language mode) '
+            .'order by match (`title`) against (? in natural language mode) desc',
+            $query->toSql()
+        );
+        $this->assertSame(['db', 'sql', 'sql'], $query->getBindings());
+
+        $this->assertSame(
+            'select * from `posts` order by match (`title`) against (? in natural language mode) asc',
+            $this->query()->from('posts')->orderByFullTextRelevance('title', 'x', direction: 'asc')->toSql()
+        );
+    }
+
     public function testLateralJoinsThrow(): void
     {
         $this->expectException(RuntimeException::class);

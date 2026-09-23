@@ -100,6 +100,63 @@ class Builder extends BaseBuilder
     }
 
     /**
+     * Add the full-text relevance score to the select list.
+     *
+     * The columns must match a FULLTEXT index. MatrixOne scores with TF-IDF by
+     * default; set the `ft_relevancy_algorithm` session variable to 'BM25'
+     * to switch.
+     *
+     * @param  string|string[]  $columns
+     * @param  array{mode?: 'natural'|'boolean'}  $options
+     * @return $this
+     */
+    public function selectFullTextRelevance(string|array $columns, string $value, string $as = 'relevance', array $options = []): static
+    {
+        $this->addBinding($value, 'select');
+
+        return $this->addSelect(new Expression(
+            $this->grammar->compileFullTextMatch($columns, $options).' as '.$this->grammar->wrap($as)
+        ));
+    }
+
+    /**
+     * Order the query by full-text relevance (most relevant first).
+     *
+     * @param  string|string[]  $columns
+     * @param  array{mode?: 'natural'|'boolean'}  $options
+     * @return $this
+     */
+    public function orderByFullTextRelevance(string|array $columns, string $value, array $options = [], string $direction = 'desc'): static
+    {
+        $direction = strtolower($direction);
+
+        if (! in_array($direction, ['asc', 'desc'], true)) {
+            throw new InvalidArgumentException('Order direction must be "asc" or "desc".');
+        }
+
+        $this->addBinding($value, $this->unions ? 'unionOrder' : 'order');
+
+        $this->{$this->unions ? 'unionOrders' : 'orders'}[] = [
+            'column' => new Expression($this->grammar->compileFullTextMatch($columns, $options)),
+            'direction' => $direction,
+        ];
+
+        return $this;
+    }
+
+    /**
+     * Search a FULLTEXT index and order the matches by relevance.
+     *
+     * @param  string|string[]  $columns
+     * @param  array{mode?: 'natural'|'boolean'}  $options
+     * @return $this
+     */
+    public function searchFullText(string|array $columns, string $value, array $options = []): static
+    {
+        return $this->whereFullText($columns, $value, $options)->orderByFullTextRelevance($columns, $value, $options);
+    }
+
+    /**
      * Add a vector distance to the select list.
      *
      * @param  Arrayable<int, mixed>|array<int, mixed>|string  $vector

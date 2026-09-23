@@ -183,6 +183,43 @@ class Grammar extends MySqlGrammar
     /**
      * {@inheritDoc}
      *
+     * MatrixOne rejects `with query expansion`, so it fails before reaching
+     * the server instead of surfacing an internal error.
+     *
+     * @param  array<string, mixed>  $where
+     */
+    public function whereFullText(Builder $query, $where)
+    {
+        /** @var array<string, mixed> $options */
+        $options = $where['options'] ?? [];
+
+        return $this->compileFullTextMatch($where['columns'], $options, $this->parameter($where['value']));
+    }
+
+    /**
+     * Compile `match (columns) against (value mode)`.
+     *
+     * Supported options: `mode` => 'natural' (default) or 'boolean'.
+     *
+     * @param  array<string, mixed>  $options
+     */
+    public function compileFullTextMatch(mixed $columns, array $options, string $value = '?'): string
+    {
+        $boolean = ($options['mode'] ?? null) === 'boolean';
+
+        if (($options['expanded'] ?? false) && ! $boolean) {
+            throw new RuntimeException('Full-text query expansion is not supported by MatrixOne.');
+        }
+
+        /** @var array<int, string> $list */
+        $list = (array) $columns;
+
+        return 'match ('.$this->columnize($list).") against ({$value}".($boolean ? ' in boolean mode' : ' in natural language mode').')';
+    }
+
+    /**
+     * {@inheritDoc}
+     *
      * MatrixOne's LIKE is case-sensitive regardless of the column collation,
      * so case-insensitive matches use ILIKE; case-sensitive ones keep
      * `like binary`.
