@@ -39,10 +39,31 @@ class GrammarTest extends TestCase
         $this->assertSame('delete from `users` where `id` = ?', $query->getGrammar()->compileDelete($query));
     }
 
+    public function testUpsertNeverAssignsTheUniqueByColumns(): void
+    {
+        $query = $this->query()->from('cache');
+
+        $this->assertSame(
+            'insert into `cache` (`expiration`, `key`, `value`) values (?, ?, ?) on duplicate key update `expiration` = values(`expiration`), `value` = values(`value`)',
+            $query->getGrammar()->compileUpsert($query, [['expiration' => 1, 'key' => 'k', 'value' => 'v']], ['key'], ['expiration', 'key', 'value'])
+        );
+        $this->assertSame(
+            'insert ignore into `cache` (`key`) values (?)',
+            $query->getGrammar()->compileUpsert($query, [['key' => 'k']], ['key'], ['key'])
+        );
+    }
+
     public function testSharedLockIsPromotedToForUpdate(): void
     {
         $this->assertSame('select * from `users` for update', $this->query()->from('users')->sharedLock()->toSql());
         $this->assertSame('select * from `users` for update', $this->query()->from('users')->lockForUpdate()->toSql());
+    }
+
+    public function testSkipLockedAndNowaitAreDropped(): void
+    {
+        $this->assertSame('select * from `jobs` for update', $this->query()->from('jobs')->lock('FOR UPDATE SKIP LOCKED')->toSql());
+        $this->assertSame('select * from `jobs` for update', $this->query()->from('jobs')->lock('for update nowait')->toSql());
+        $this->assertSame('select * from `jobs` for update', $this->query()->from('jobs')->lock('for update')->toSql());
     }
 
     public function testRandomOrderIgnoresTheSeed(): void

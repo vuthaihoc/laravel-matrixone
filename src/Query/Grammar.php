@@ -63,6 +63,20 @@ class Grammar extends MySqlGrammar
      */
     public function compileUpsert(Builder $query, array $values, array $uniqueBy, array $update)
     {
+        // MatrixOne rejects assigning a primary key on duplicate ("update
+        // primary key on duplicate"), even to its own value, and Laravel's
+        // cache upserts every column including the key. The uniqueBy columns
+        // already match on a duplicate, so they are left out.
+        $update = array_filter(
+            $update,
+            fn ($value, $key) => ! is_numeric($key) || ! in_array($value, $uniqueBy, true),
+            ARRAY_FILTER_USE_BOTH
+        );
+
+        if ($update === []) {
+            return $this->compileInsertOrIgnore($query, $values);
+        }
+
         $sql = $this->compileInsert($query, $values).' on duplicate key update ';
 
         $columns = (new Collection($update))->map(function ($value, $key) {
@@ -282,8 +296,13 @@ class Grammar extends MySqlGrammar
     /**
      * {@inheritDoc}
      *
-     * MatrixOne has no `lock in share mode` / `for share`; a shared lock is
-     * promoted to `for update`, which is stricter but never less safe.
+     * - A shared lock is promoted to `for update` (`lock in share mode` is not
+     *   supported, and `for share` only since 4.2.4), which is stricter but
+     *   never less safe.
+     * - MatrixOne has no `skip locked` / `nowait`. Laravel's database queue
+     *   pops jobs with `FOR UPDATE SKIP LOCKED` on MySQL 8 servers, so those
+     *   modifiers are dropped: concurrent workers wait for each other instead
+     *   of skipping locked rows.
      */
     protected function compileLock(Builder $query, $value)
     {
@@ -291,7 +310,9 @@ class Grammar extends MySqlGrammar
             return 'for update';
         }
 
-        return $value;
+        $lock = trim((string) preg_replace('/\s+(skip\s+locked|nowait)\s*$/i', '', $value));
+
+        return $lock === $value ? $value : strtolower($lock);
     }
 
     /**
