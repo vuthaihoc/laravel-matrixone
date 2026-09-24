@@ -12,6 +12,7 @@ use Laravel\Scout\EngineManager;
 use MatrixOne\Connectors\MatrixOneConnector;
 use MatrixOne\Console\DbCommand;
 use MatrixOne\Console\PitrCommand;
+use MatrixOne\Console\SlowQueriesCommand;
 use MatrixOne\Console\SnapshotCommand;
 use MatrixOne\Pulse\MatrixOneStorage;
 use MatrixOne\Scout\MatrixOneEngine;
@@ -63,7 +64,7 @@ class MatrixOneServiceProvider extends ServiceProvider
     public function boot(): void
     {
         if ($this->app->runningInConsole()) {
-            $this->commands([SnapshotCommand::class, PitrCommand::class]);
+            $this->commands([SnapshotCommand::class, PitrCommand::class, SlowQueriesCommand::class]);
         }
 
         if ($this->app->runningInConsole() && class_exists(PulseDatabaseStorage::class)) {
