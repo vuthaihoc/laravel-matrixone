@@ -29,10 +29,19 @@ final class FullTextQuery implements Stringable
      * Match documents containing any of the words of free text, ranked by
      * relevance: the behaviour of MySQL's natural language mode. MatrixOne's
      * natural language mode instead only matches words appearing together.
+     * With $prefix, each word also matches longer words starting with it.
      */
-    public static function anyOf(string $text): self
+    public static function anyOf(string $text, bool $prefix = false): self
     {
-        return (new self)->encourage(...self::words($text));
+        $query = new self;
+
+        foreach (self::words($text) as $word) {
+            // A trailing * matches longer words ("learn" finds "learning"),
+            // making up for the missing stemming.
+            $query->parts[] = $prefix ? $word.'*' : $word;
+        }
+
+        return $query;
     }
 
     /**

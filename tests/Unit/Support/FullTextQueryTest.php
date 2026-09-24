@@ -27,6 +27,7 @@ class FullTextQueryTest extends TestCase
         $this->assertSame('"a b"', FullTextQuery::make()->phrase('a" -b')->toString());
         $this->assertSame('how to learn python', FullTextQuery::anyOf('how to (learn) +python*')->toString());
         $this->assertTrue(FullTextQuery::anyOf(' +-~ ')->isEmpty());
+        $this->assertSame('learn* data*', FullTextQuery::anyOf('learn data', prefix: true)->toString());
     }
 
     public function testBuilderHelpers(): void
