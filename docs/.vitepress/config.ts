@@ -33,6 +33,7 @@ export default defineConfig({
           { text: 'Schema', link: '/docs/schema' },
           { text: 'Full-text Search', link: '/docs/full-text' },
           { text: 'Analytics', link: '/docs/analytics' },
+          { text: 'Monitoring', link: '/docs/monitoring' },
           { text: 'Integrations', link: '/docs/integrations' },
           { text: 'Testing', link: '/docs/testing' },
           { text: 'AI Assistants (Boost)', link: '/docs/boost' },

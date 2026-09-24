@@ -1,6 +1,6 @@
 ---
 name: matrixone-development
-description: "Use when an app uses the vuthaihoc/laravel-matrixone driver or a database connection with 'driver' => 'matrixone'. Trigger when designing migrations or schemas, adding indexes, foreign keys or full-text indexes, storing JSON, writing Eloquent or query builder code, implementing search or vector similarity (embeddings, nearest neighbours), analytics (time windows, sampling, snapshots, time travel, CLUSTER BY), configuring MatrixOne session variables, writing tests against MatrixOne, or debugging MatrixOne errors such as 'panic runtime error', 'not supported', case-sensitivity surprises or hanging tests."
+description: "Use when an app uses the vuthaihoc/laravel-matrixone driver or a database connection with 'driver' => 'matrixone'. Trigger when designing migrations or schemas, adding indexes, foreign keys or full-text indexes, storing JSON, writing Eloquent or query builder code, implementing search or vector similarity (embeddings, nearest neighbours), analytics (time windows, sampling, snapshots, time travel, CLUSTER BY), slow queries or statement history, configuring MatrixOne session variables, writing tests against MatrixOne, or debugging MatrixOne errors such as 'panic runtime error', 'not supported', case-sensitivity surprises or hanging tests."
 license: MIT
 metadata:
   author: vuthaihoc
@@ -135,6 +135,23 @@ DB::table('orders')->asOfTimestamp(now()->subHour())->count();
 - Time travel applies to the `from` table only; time-travel joins through `joinSub()`.
 - `php artisan matrixone:snapshot create|drop|list` and `matrixone:pitr create|alter|drop|list --range=7d`.
 - `$table->clusterBy(['device', 'recorded_at'])` in `Schema::create()` only, and only on tables without a primary key (no `id()`; a unique index is fine): use it for append-only facts.
+
+## Monitoring and slow queries
+
+MatrixOne records every statement in `system.statement_info` (no slow query log to enable; `slow_query_log` / `long_query_time` are compatibility variables). Use the driver's helpers:
+
+```php
+$db = DB::connection('matrixone');
+$db->statementLog()->slowerThan(500)->slowest()->summary()->limit(20)->get();   // app statements, this database, last hour
+$db->statementLog()->since('1d')->failed()->summary()->latest('request_at')->get();
+$db->getStatementPlan($statementId)?->nodes();   // per-operator time and rows; only for statements >= 1 s
+$db->tableStats('orders');                        // rows, size (refreshed ~1 min late), columns, min/max per column
+```
+
+- `php artisan matrixone:slow-queries --since=1h --min=500`, `--failed`, `--type=Select`, `--plan=<statement id>`.
+- Times in `statement_info` are UTC; statements appear a few seconds after they finish; short repeated statements are merged (`/* N queries */`, `aggr_count`). Always filter by time.
+- For a query you can re-run, `DB::select('explain analyze '.$query->toRawSql())`.
+- Do not use `mo_table_rows()` for exact counts right after writes.
 
 ## Session variables
 

@@ -109,6 +109,7 @@ See [AI Assistants](docs/docs/boost.md) for installation, updates, customization
 | [Query Builder](docs/docs/query-builder.md) | Behaviour differences, JSON, full-text and vector queries |
 | [Eloquent](docs/docs/eloquent.md) | Models, the `AsVector` cast, transactions |
 | [Full-text Search](docs/docs/full-text.md) | Parsers, relevance, session variables, FULLTEXT2 |
+| [Monitoring](docs/docs/monitoring.md) | Statement history, slow queries, execution plans, table statistics |
 | [Analytics](docs/docs/analytics.md) | Window functions, time windows, sampling, snapshots, time travel, CLUSTER BY |
 | [Integrations](docs/docs/integrations.md) | Laravel Scout (in-table and separate index), Pulse and Telescope |
 | [Schema](docs/docs/schema.md) | Column types, indexes, vector indexes, introspection |
@@ -136,6 +137,7 @@ Towards full parity with Laravel's MySQL and PostgreSQL drivers:
 - [x] `matrixone-index` Scout engine: MatrixOne as a separate search index for models in any database
 - [x] Snapshot / time-travel helpers
 - [x] Time windows, sampling and `CLUSTER BY`
+- [x] Slow query and statement history helpers (`statementLog()`, `matrixone:slow-queries`, `tableStats()`)
 - [ ] Hybrid full-text + vector search helper
 - [ ] Bulk loading with `LOAD DATA`
 - [ ] Compatibility matrix across MatrixOne 4.2.x releases
