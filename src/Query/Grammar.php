@@ -8,10 +8,33 @@ use Illuminate\Database\Query\Grammars\MySqlGrammar;
 use Illuminate\Database\Query\JoinLateralClause;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
+use MatrixOne\Query\Builder as MatrixOneBuilder;
 use RuntimeException;
 
 class Grammar extends MySqlGrammar
 {
+    /**
+     * {@inheritDoc}
+     *
+     * MatrixOne's time window clause (INTERVAL ... SLIDING ... FILL) comes
+     * right after WHERE.
+     */
+    protected $selectComponents = [
+        'aggregate',
+        'columns',
+        'from',
+        'indexHint',
+        'joins',
+        'wheres',
+        'timeWindow',
+        'groups',
+        'havings',
+        'orders',
+        'limit',
+        'offset',
+        'lock',
+    ];
+
     /**
      * Distance functions keyed by the metric names accepted by the builder.
      *
@@ -447,5 +470,101 @@ class Grammar extends MySqlGrammar
     public function supportsVectorDistance()
     {
         return true;
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * A sampled query wraps its columns in SAMPLE(<columns>, <n> rows).
+     *
+     * @param  array<int, \Illuminate\Contracts\Database\Query\Expression|string>  $columns
+     */
+    protected function compileColumns(Builder $query, $columns)
+    {
+        $sample = $query instanceof MatrixOneBuilder ? $query->sample : null;
+
+        if ($sample === null || ! is_null($query->aggregate)) {
+            return parent::compileColumns($query, $columns);
+        }
+
+        $size = $sample['unit'] === 'rows' ? (int) $sample['size'] : rtrim(rtrim(sprintf('%.2F', $sample['size']), '0'), '.');
+        $selected = $columns;
+
+        // SAMPLE() takes "*" but no "table.*".
+        $wrap = fn (array $columns) => count($columns) === 1 && is_string($columns[0]) && str_ends_with($columns[0], '*')
+            ? '*'
+            : $this->columnize($columns);
+
+        if ($sample['columns'] === null) {
+            $clause = 'sample('.$wrap($selected).', '.$size.' '.$sample['unit'].')';
+        } else {
+            $others = array_values(array_filter($selected, fn ($column) => ! is_string($column) || ! str_ends_with($column, '*')));
+            $clause = ($others === [] ? '' : $this->columnize($others).', ')
+                .'sample('.$wrap($sample['columns']).', '.$size.' '.$sample['unit'].')';
+        }
+
+        return ($query->distinct ? 'select distinct ' : 'select ').$clause;
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * Appends the time travel clause ({snapshot = ...} / {as of timestamp ...}).
+     */
+    protected function compileFrom(Builder $query, $table)
+    {
+        $timeTravel = $query instanceof MatrixOneBuilder ? $query->timeTravel : null;
+
+        if ($timeTravel === null) {
+            return parent::compileFrom($query, $table);
+        }
+
+        if (! is_string($table)) {
+            throw new InvalidArgumentException('Time travel reads a table: call asOfSnapshot() / asOfTimestamp() inside the subquery instead.');
+        }
+
+        // The clause goes between the table and its alias.
+        if (preg_match('/^(.+?)\s+as\s+(\S+)$/i', $table, $matches)) {
+            return 'from '.$this->wrapTable($matches[1]).' '.$timeTravel.' as '.$this->wrapTable($matches[2], '');
+        }
+
+        return 'from '.$this->wrapTable($table).' '.$timeTravel;
+    }
+
+    /**
+     * Quote a string literal embedded in SQL, escaping quotes and
+     * backslashes (Laravel's quoteString() only wraps the value).
+     */
+    public function quoteLiteral(string $value): string
+    {
+        return "'".str_replace(['\\', "'"], ['\\\\', "''"], $value)."'";
+    }
+
+    /**
+     * Compile MatrixOne's time window clause.
+     *
+     * @param  array{column: \Illuminate\Contracts\Database\Query\Expression|string, interval: array{int, string}, sliding: array{int, string}|null, fill: string|null, fillValue: int|float|null}  $window
+     */
+    protected function compileTimeWindow(Builder $query, array $window): string
+    {
+        if ($query->groups || $query->havings) {
+            throw new InvalidArgumentException('MatrixOne cannot combine a time window with GROUP BY or HAVING.');
+        }
+
+        [$length, $unit] = $window['interval'];
+        $sql = 'interval('.$this->wrap($window['column']).', '.$length.', '.$unit.')';
+
+        if ($window['sliding'] !== null) {
+            [$length, $unit] = $window['sliding'];
+            $sql .= ' sliding('.$length.', '.$unit.')';
+        }
+
+        if ($window['fill'] === 'value') {
+            $sql .= ' fill(value, '.var_export($window['fillValue'], true).')';
+        } elseif ($window['fill'] !== null) {
+            $sql .= ' fill('.$window['fill'].')';
+        }
+
+        return $sql;
     }
 }

@@ -2,6 +2,7 @@
 
 namespace MatrixOne\Query;
 
+use DateTimeInterface;
 use Illuminate\Contracts\Database\Query\Expression as ExpressionContract;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Database\Eloquent\Model;
@@ -19,6 +20,25 @@ use MatrixOne\Support\Vector;
  */
 class Builder extends BaseBuilder
 {
+    /**
+     * The time window aggregation: interval(...) sliding(...) fill(...).
+     *
+     * @var array{column: ExpressionContract|string, interval: array{int, string}, sliding: array{int, string}|null, fill: string|null, fillValue: int|float|null}|null
+     */
+    public ?array $timeWindow = null;
+
+    /**
+     * The SAMPLE() clause: size, unit (rows or percent) and sampled columns.
+     *
+     * @var array{size: int|float, unit: string, columns: array<int, ExpressionContract|string>|null}|null
+     */
+    public ?array $sample = null;
+
+    /**
+     * The time travel clause read by the "from" table, e.g. {snapshot = 'daily'}.
+     */
+    public ?string $timeTravel = null;
+
     /**
      * {@inheritDoc}
      *
@@ -383,5 +403,158 @@ class Builder extends BaseBuilder
         string $metric = 'cosine',
     ): static {
         return $this->orderByVectorDistanceUsing($metric, $column, $vector)->limit($limit);
+    }
+
+    /**
+     * Aggregate rows by time window with MatrixOne's INTERVAL clause:
+     * timeWindow('ts', '10 seconds', sliding: '5 seconds', fill: 'prev').
+     * Select the window bounds as `_wstart` / `_wend` next to aggregates.
+     *
+     * @param  string  $interval  "<n> <unit>", unit second, minute, hour or day
+     * @param  string|null  $sliding  "<n> <unit>"
+     * @param  string|null  $fill  prev, next, linear, null, none or value
+     * @return $this
+     */
+    public function timeWindow(
+        ExpressionContract|string $column,
+        string $interval,
+        ?string $sliding = null,
+        ?string $fill = null,
+        int|float|null $fillValue = null,
+    ): static {
+        $fill = $fill === null ? null : strtolower($fill);
+
+        if ($fill !== null && ! in_array($fill, ['prev', 'next', 'linear', 'null', 'none', 'value'], true)) {
+            throw new InvalidArgumentException('Time window fill must be prev, next, linear, null, none or value.');
+        }
+
+        if (($fill === 'value') !== ($fillValue !== null)) {
+            throw new InvalidArgumentException('A time window fill value is given with, and only with, fill: "value".');
+        }
+
+        $this->timeWindow = [
+            'column' => $column,
+            'interval' => $this->parseTimeWindowDuration($interval),
+            'sliding' => $sliding === null ? null : $this->parseTimeWindowDuration($sliding),
+            'fill' => $fill,
+            'fillValue' => $fillValue,
+        ];
+
+        return $this;
+    }
+
+    /**
+     * Return a random sample of at most $rows rows (MatrixOne's SAMPLE()).
+     * With $columns, only those columns are sampled and the other selected
+     * columns act as groups: select('city')->sample(3, 'id')->groupBy('city').
+     *
+     * @param  array<int, ExpressionContract|string>|ExpressionContract|string|null  $columns
+     * @return $this
+     */
+    public function sample(int $rows, array|ExpressionContract|string|null $columns = null): static
+    {
+        if ($rows < 1) {
+            throw new InvalidArgumentException('The sample size must be at least one row.');
+        }
+
+        $this->sample = ['size' => $rows, 'unit' => 'rows', 'columns' => $columns === null ? null : (array) $columns];
+
+        return $this;
+    }
+
+    /**
+     * Return each row with the given probability (0.01 to 99.99 percent).
+     *
+     * @param  array<int, ExpressionContract|string>|ExpressionContract|string|null  $columns
+     * @return $this
+     */
+    public function samplePercent(float $percent, array|ExpressionContract|string|null $columns = null): static
+    {
+        if ($percent < 0.01 || $percent > 99.99) {
+            throw new InvalidArgumentException('The sample percentage must be between 0.01 and 99.99.');
+        }
+
+        $this->sample = ['size' => $percent, 'unit' => 'percent', 'columns' => $columns === null ? null : (array) $columns];
+
+        return $this;
+    }
+
+    /**
+     * Read the "from" table as it was when the snapshot was taken.
+     *
+     * @return $this
+     */
+    public function asOfSnapshot(string $snapshot): static
+    {
+        $this->timeTravel = '{snapshot = '.$this->grammar->quoteLiteral($snapshot).'}';
+
+        return $this;
+    }
+
+    /**
+     * Read the "from" table as it was at the given time (session time zone).
+     * The time must be covered by a PITR or be recent enough for MatrixOne
+     * to still hold the data.
+     *
+     * @return $this
+     */
+    public function asOfTimestamp(DateTimeInterface|string $time): static
+    {
+        $time = $time instanceof DateTimeInterface ? $time->format('Y-m-d H:i:s.u') : $time;
+
+        $this->timeTravel = '{as of timestamp '.$this->grammar->quoteLiteral($time).'}';
+
+        return $this;
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * Time window and sampled queries return several rows, so aggregates
+     * such as count() are computed over them as a subquery.
+     *
+     * @param  string  $function
+     * @param  array<int, ExpressionContract|string>  $columns
+     */
+    public function aggregate($function, $columns = ['*'])
+    {
+        if ($this->timeWindow === null && $this->sample === null) {
+            return parent::aggregate($function, $columns);
+        }
+
+        return $this->newQuery()->fromSub(clone $this, 'aggregate_table')->aggregate($function, $columns);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * @param  array<int, string>  $columns
+     * @return array<int, mixed>
+     */
+    protected function runPaginationCountQuery($columns = ['*'])
+    {
+        if ($this->timeWindow === null && $this->sample === null) {
+            return parent::runPaginationCountQuery($columns);
+        }
+
+        $clone = $this->cloneWithout(['orders', 'limit', 'offset'])->cloneWithoutBindings(['order']);
+
+        return $this->newQuery()->fromSub($clone, 'aggregate_table')->setAggregate('count', ['*'])->get()->all();
+    }
+
+    /**
+     * Parse "<n> <unit>" for time windows.
+     *
+     * @return array{int, string}
+     */
+    protected function parseTimeWindowDuration(string $duration): array
+    {
+        if (! preg_match('/^\s*(\d+)\s*(second|minute|hour|day)s?\s*$/i', $duration, $matches) || (int) $matches[1] < 1) {
+            throw new InvalidArgumentException(
+                "Invalid time window duration [{$duration}]: use \"<n> second|minute|hour|day\" (MatrixOne supports no other unit)."
+            );
+        }
+
+        return [(int) $matches[1], strtolower($matches[2])];
     }
 }
