@@ -268,6 +268,142 @@ class MatrixOneConnection extends MySqlConnection
         throw new RuntimeException('Schema dumping is not supported when using MatrixOne.');
     }
 
+    /**
+     * Take a snapshot of the connection's database, or of one of its tables.
+     * Read it back with asOfSnapshot() on a query.
+     */
+    public function createSnapshot(string $name, ?string $table = null): void
+    {
+        $this->ensureValidSnapshotName($name);
+
+        $this->statement('create snapshot '.$this->wrapIdentifier($name).' for '.$this->snapshotTarget($table));
+    }
+
+    /**
+     * Take a snapshot of the whole account (every database of the tenant).
+     */
+    public function createAccountSnapshot(string $name): void
+    {
+        $this->ensureValidSnapshotName($name);
+
+        $this->statement('create snapshot '.$this->wrapIdentifier($name).' for account');
+    }
+
+    public function dropSnapshot(string $name): void
+    {
+        $this->ensureValidSnapshotName($name);
+
+        $this->statement('drop snapshot if exists '.$this->wrapIdentifier($name));
+    }
+
+    /**
+     * The snapshots visible to the account, with lower-case keys
+     * (snapshot_name, timestamp, snapshot_level, account_name, database_name, table_name).
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function getSnapshots(): array
+    {
+        return $this->lowerCaseKeys($this->select('show snapshots'));
+    }
+
+    public function hasSnapshot(string $name): bool
+    {
+        foreach ($this->getSnapshots() as $snapshot) {
+            if ($snapshot['snapshot_name'] === $name) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Keep point-in-time recovery data of the connection's database (or of
+     * one table) for $length units: h (hours), d (days), mo (months), y (years).
+     * Read past states with asOfTimestamp() on a query.
+     */
+    public function createPitr(string $name, int $length, string $unit = 'd', ?string $table = null): void
+    {
+        $this->ensureValidSnapshotName($name);
+
+        $this->statement('create pitr '.$this->wrapIdentifier($name).' for '.$this->snapshotTarget($table).' range '.$this->pitrRange($length, $unit));
+    }
+
+    /**
+     * Change the retention of a PITR.
+     */
+    public function alterPitr(string $name, int $length, string $unit = 'd'): void
+    {
+        $this->ensureValidSnapshotName($name);
+
+        $this->statement('alter pitr '.$this->wrapIdentifier($name).' range '.$this->pitrRange($length, $unit));
+    }
+
+    public function dropPitr(string $name): void
+    {
+        $this->ensureValidSnapshotName($name);
+
+        $this->statement('drop pitr if exists '.$this->wrapIdentifier($name));
+    }
+
+    /**
+     * The PITRs visible to the account, with lower-case keys
+     * (pitr_name, created_time, modified_time, pitr_level, account_name,
+     * database_name, table_name, pitr_length, pitr_unit).
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function getPitrs(): array
+    {
+        return $this->lowerCaseKeys($this->select('show pitr'));
+    }
+
+    /**
+     * "database `db`" or "table `db` `prefixed_table`".
+     */
+    protected function snapshotTarget(?string $table): string
+    {
+        $database = $this->wrapIdentifier($this->getDatabaseName());
+
+        return $table === null
+            ? 'database '.$database
+            : 'table '.$database.' '.$this->wrapIdentifier($this->getTablePrefix().$table);
+    }
+
+    /**
+     * MatrixOne accepts letters, digits, "_" and "-" in snapshot and PITR names.
+     */
+    protected function ensureValidSnapshotName(string $name): void
+    {
+        if (! preg_match('/^[A-Za-z0-9_-]{1,64}$/', $name)) {
+            throw new InvalidArgumentException("Invalid snapshot or PITR name [{$name}]: use letters, digits, \"_\" and \"-\".");
+        }
+    }
+
+    protected function pitrRange(int $length, string $unit): string
+    {
+        if ($length < 1 || ! in_array($unit, ['h', 'd', 'mo', 'y'], true)) {
+            throw new InvalidArgumentException('A PITR range is a positive length in h, d, mo or y.');
+        }
+
+        return $length.' '.$this->getQueryGrammar()->quoteString($unit);
+    }
+
+    protected function wrapIdentifier(string $name): string
+    {
+        return '`'.str_replace('`', '``', $name).'`';
+    }
+
+    /**
+     * @param  array<int, mixed>  $rows
+     * @return list<array<string, mixed>>
+     */
+    protected function lowerCaseKeys(array $rows): array
+    {
+        return array_values(array_map(fn ($row) => array_change_key_case((array) $row), $rows));
+    }
+
     /** {@inheritDoc} */
     protected function getDefaultPostProcessor()
     {
