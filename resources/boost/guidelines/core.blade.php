@@ -8,4 +8,5 @@
 - Not available: generated columns (`virtualAs`/`storedAs`), expression indexes, `set`/spatial columns, lateral joins, full-text query expansion, indexes on TEXT columns without a prefix length.
 - Use `whereFullText()`, `searchFullText()` and the vector helpers (`vector()` columns, `nearestTo()`, `whereVectorSimilarTo()`) instead of raw `MATCH ... AGAINST` or distance SQL.
 - Never select a correlated subquery with `limit` (e.g. `addSelect([... ->latest()->limit(1)])`): MatrixOne silently returns NULL for most rows. Use `latestOfMany()` / `ofMany()` relationships or aggregate subqueries.
+- For analytics use the driver's `timeWindow()`, `sample()`, `asOfSnapshot()` / `asOfTimestamp()` and `clusterBy()` rather than raw MatrixOne syntax; `clusterBy()` requires a table without a primary key.
 - Avoid raw `SELECT LAST_INSERT_ID()` and raw boolean expressions cast to PHP booleans; use `insertGetId()` / Eloquent keys and `exists()`.

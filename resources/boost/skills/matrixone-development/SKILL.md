@@ -1,6 +1,6 @@
 ---
 name: matrixone-development
-description: "Use when an app uses the vuthaihoc/laravel-matrixone driver or a database connection with 'driver' => 'matrixone'. Trigger when designing migrations or schemas, adding indexes, foreign keys or full-text indexes, storing JSON, writing Eloquent or query builder code, implementing search or vector similarity (embeddings, nearest neighbours), configuring MatrixOne session variables, writing tests against MatrixOne, or debugging MatrixOne errors such as 'panic runtime error', 'not supported', case-sensitivity surprises or hanging tests."
+description: "Use when an app uses the vuthaihoc/laravel-matrixone driver or a database connection with 'driver' => 'matrixone'. Trigger when designing migrations or schemas, adding indexes, foreign keys or full-text indexes, storing JSON, writing Eloquent or query builder code, implementing search or vector similarity (embeddings, nearest neighbours), analytics (time windows, sampling, snapshots, time travel, CLUSTER BY), configuring MatrixOne session variables, writing tests against MatrixOne, or debugging MatrixOne errors such as 'panic runtime error', 'not supported', case-sensitivity surprises or hanging tests."
 license: MIT
 metadata:
   author: vuthaihoc
@@ -108,6 +108,33 @@ Document::nearestTo('embedding', $vector, 10, metric: 'l2')->get();
 Document::whereVectorSimilarTo('embedding', $vector, minSimilarity: 0.8)->get();
 Document::whereVectorDistanceUsing('cosine', 'embedding', $vector, '<', 0.3)->get();
 ```
+
+## Analytics
+
+MatrixOne is columnar (HTAP): aggregate the application's tables directly. Window functions, `with rollup`, `grouping sets`, `cube`, `median()`, `approx_percentile()`, `approx_count_distinct()` work through `selectRaw()` / `groupByRaw()`; named windows, `QUALIFY`, `percentile_cont ... within group`, `EXCEPT ALL` and `JSON_TABLE` do not.
+
+```php
+// Time windows (units: second, minute, hour, day; no GROUP BY / HAVING)
+DB::table('metrics')->select('_wstart', '_wend', DB::raw('avg(value) as avg'))
+    ->where('device', $device)
+    ->timeWindow('recorded_at', '1 minute', sliding: '30 seconds', fill: 'prev')->get();
+
+// Random samples, far cheaper than inRandomOrder()
+Event::query()->where('type', 'click')->sample(100)->get();
+DB::table('events')->samplePercent(0.5)->get();
+DB::table('users')->select('country')->sample(3, 'id')->groupBy('country')->get(); // 3 per country
+
+// Snapshots, PITR and time travel
+DB::connection('matrixone')->createSnapshot('orders_eod', 'orders');   // or createSnapshot($name) for the database
+DB::connection('matrixone')->createPitr('orders_pitr', 7, 'd', 'orders');
+Order::query()->asOfSnapshot('orders_eod')->sum('total');
+DB::table('orders')->asOfTimestamp(now()->subHour())->count();
+```
+
+- `RESTORE ... FROM SNAPSHOT` fails on 4.2.4: restore with `insertUsing([...], DB::table('t')->asOfSnapshot('s')->select([...])->whereNotIn('id', DB::table('t')->select('id')))`.
+- Time travel applies to the `from` table only; time-travel joins through `joinSub()`.
+- `php artisan matrixone:snapshot create|drop|list` and `matrixone:pitr create|alter|drop|list --range=7d`.
+- `$table->clusterBy(['device', 'recorded_at'])` in `Schema::create()` only, and only on tables without a primary key (no `id()`; a unique index is fine): use it for append-only facts.
 
 ## Session variables
 

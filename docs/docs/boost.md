@@ -35,6 +35,7 @@ The **skill** is the detailed reference an agent reads before designing a schema
 | Connection | `config/database.php`, `emulate_prepares`, `variables`, `ignore_json_*` options |
 | Schema design rules | Keys, foreign keys vs FULLTEXT, JSON, vector columns and indexes (IVF-Flat, HNSW) |
 | Queries | Case sensitivity, `LIKE`, JSON methods, upserts, locks, full-text (`FullTextQuery`), vectors |
+| Analytics | Window functions, time windows, sampling, snapshots, PITR, time travel, `clusterBy()` |
 | Session variables | `variables` option, `withSessionVariables()`, BM25 |
 | Laravel Scout | `matrixone` and `matrixone-index` engines, language behaviour, embeddings, semantic and hybrid search |
 | Laravel Pulse and Telescope | The Pulse migration to publish |

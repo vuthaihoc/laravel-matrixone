@@ -23,9 +23,10 @@ Local runs may use a gitignored `phpunit.xml` (copied from `phpunit.xml.dist`) t
 - `src/MatrixOneServiceProvider.php` — binds `db.connector.matrixone` and `Connection::resolverFor('matrixone')`, so Laravel's ConnectionFactory builds the connection like a built-in driver.
 - `src/MatrixOneConnection.php` — extends `MySqlConnection`: grammars, processor, unique-violation detection, `getMatrixOneVersion()`, and dropping connections broken by a server panic (`handleQueryException`).
 - `src/Connectors/MatrixOneConnector.php` — extends `MySqlConnector`; emulated prepares on by default (`emulate_prepares` option); applies the `variables` option with `SET SESSION`.
+- Snapshots and PITR: `MatrixOneConnection::createSnapshot()`, `createPitr()`, … and the `matrixone:snapshot` / `matrixone:pitr` commands (`src/Console/`).
 - Session variables at runtime: `MatrixOneConnection::setSessionVariables()`, `getSessionVariables()`, `withSessionVariables()`.
 - `src/Query/Grammar.php` — MySQL grammar overrides (exists, upsert, locks, RAND, savepoints off, JSON, DELETE safeguard, vector distance).
-- `src/Query/Builder.php` — truncate fallback, full-text relevance helpers (`searchFullText`, `selectFullTextRelevance`, `orderByFullTextRelevance`), vector helpers (`nearestTo`, `*VectorDistanceUsing`) and overrides of Laravel's vector methods.
+- `src/Query/Builder.php` — analytics (`timeWindow`, `sample`, `samplePercent`, `asOfSnapshot`, `asOfTimestamp`, compiled by the grammar's `compileTimeWindow`/`compileColumns`/`compileFrom`), truncate fallback, full-text relevance helpers (`searchFullText`, `selectFullTextRelevance`, `orderByFullTextRelevance`), vector helpers (`nearestTo`, `*VectorDistanceUsing`) and overrides of Laravel's vector methods.
 - `src/Query/Processors/MatrixOneProcessor.php` — normalizes column/index metadata.
 - `src/Schema/Grammar.php`, `Builder.php` — DDL and introspection overrides, vector columns and indexes. Blueprint additions (`vector64`, and `vectorIndex`/`dropVectorIndex` on Laravel versions lacking them) are macros registered in `MatrixOneServiceProvider::registerBlueprintMacros()`; do not reintroduce a Blueprint subclass.
 - `src/Eloquent/Casts/AsVector.php`, `src/Support/Vector.php` — vector literal conversion.

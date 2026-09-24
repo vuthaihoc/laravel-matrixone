@@ -20,6 +20,10 @@ MatrixOne speaks the MySQL 8.0 protocol but implements a subset of MySQL. This p
 | `ILIKE` rejects numbers and dates | Columns are cast to text first |
 | Natural language full-text mode only matches words appearing together | `FullTextQuery::anyOf()` and the Scout engine use boolean mode (any word) |
 | Full-text has no stemming, stopwords or accent folding | `FullTextQuery::anyOf(prefix: true)`, `TextNormalizer::foldAccents()`, `matrixone-index` options; see [Full-text › Languages](./full-text#languages) |
+| `CLUSTER BY` refuses tables with a primary key and cannot be added later | `clusterBy()` throws on a primary key or outside `Schema::create()` |
+| A time window cannot be combined with `GROUP BY` / `HAVING`; units are second, minute, hour, day | `timeWindow()` validates units and throws on groups; aggregates such as `count()` run over the windows |
+| `SAMPLE()` takes `*` but not `table.*` | `sample()` compiles Eloquent's `table.*` to `*` |
+| Snapshot names reject quotes | Snapshot and PITR names are validated (letters, digits, `_`, `-`) |
 | `MATCH ... AGAINST` cannot be OR-ed with other conditions | The Scout engine uses a subquery; see [Full-text › Limitations](./full-text#limitations) |
 | `LAST_INSERT_ID()` is wrong on tables with a FULLTEXT index | `insertGetId()` uses `insert ... returning` |
 | Identifiers are limited to 64 characters | Long index names are shortened consistently |
@@ -66,5 +70,6 @@ composer test:known-issues
 - **4.2.4 panic on correlated counts.** `loadCount()` / `withCount()` on a single parent selected by primary key (`find($id)`, `whereIn('id', [$id])`) crashes the server when the related query has an extra condition, e.g. SoftDeletes (`Error reading result set's header`). Count on the relation instead: `$user->posts()->count()`. The driver drops the broken connection, forgetting its transaction, so later queries reconnect instead of blocking on the row locks the dead session still holds.
 - `=` compares strings case-sensitively even on `_ci` collations; the driver cannot change this without losing index use. Use the `Lowercase` cast or `whereIgnoreCase()` ([Query Builder › Case-insensitive equality](./query-builder#case-insensitive-equality)).
 - **4.2.4:** inserting into a table with both a foreign key and a FULLTEXT index panics in the query planner. Keep full-text indexes on tables without their own foreign keys.
+- **`RESTORE ... FROM SNAPSHOT` is a syntax error** on 4.2.4. Copy the rows back with `insertUsing()` and `asOfSnapshot()` ([Analytics › Restoring data](./analytics#restoring-data)).
 - **FULLTEXT2** indexes (4.2.2+) are experimental and are not indexed synchronously; the driver does not use them.
 - **HNSW** vector indexes are experimental: they need a signed `BIGINT` primary key and are maintained asynchronously (sync with `alter reindex ... hnsw force_sync`). `vectorIndex()` builds IVF-Flat unless `->hnsw()` is called.
