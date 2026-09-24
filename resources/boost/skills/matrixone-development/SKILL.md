@@ -93,7 +93,7 @@ MatrixOne's natural language mode only matches words appearing together (MySQL m
 
 Query expansion (`['expanded' => true]`) throws. The columns must match one FULLTEXT index. MatrixOne cannot OR a `MATCH ... AGAINST` with other conditions: write `->orWhereIn('id', DB::table('t')->select('id')->whereFullText(...))` instead of `->orWhereFullText(...)` next to other wheres.
 
-Laravel Scout: use `SCOUT_DRIVER=matrixone` (not `database`): it handles full-text + LIKE columns, orders by relevance and supports `->semantic()` / `->hybrid()` with a `vector('embedding', n)` column and `toSearchableEmbedding()`.
+Laravel Scout: use `SCOUT_DRIVER=matrixone` (not `database`) or `matrixone-index`; see the Laravel Scout section below.
 
 Vectors:
 
@@ -133,6 +133,43 @@ Useful variables: `ft_relevancy_algorithm` (`TF-IDF`/`BM25`, typos are accepted 
 - `SCOUT_DRIVER=matrixone`: models stored in MatrixOne; full-text columns, relevance ordering, `->semantic()` and `->hybrid()` on a vector column. Do not use Scout's `database` engine for models with full-text columns.
 - `SCOUT_DRIVER=matrixone-index`: models stored in any database, MatrixOne used as a separate search index. Configure `config('scout.matrixone-index')`: `connection` and `index-settings` per model (`fulltext`, `filterable`, `sortable` with types, `parser`, `fold_accents`, `prefix`, `mode`, `embedding`). Every attribute used in `where`/`whereIn`/`orderBy` must be declared as filterable or sortable.
 - Full-text has no language support: no stemming (`learn` ≠ `learning`), no stopwords, accents significant (`tieng` ≠ `tiếng`). Use `prefix`, `fold_accents` / `TextNormalizer::foldAccents()` and the `ngram` parser for CJK.
+
+### Embeddings (semantic and hybrid search)
+
+Both engines read the vector from `toSearchableEmbedding()` on the model:
+
+```php
+// A string is embedded with the Laravel AI SDK (laravel/ai), cached, one API call per indexed batch.
+public function toSearchableEmbedding(): string
+{
+    return $this->title."\n".$this->body;
+}
+
+// An array is stored as is (vectors computed elsewhere); laravel/ai is then not needed for indexing.
+public function toSearchableEmbedding(): array
+{
+    return $this->precomputed_vector;
+}
+```
+
+- `matrixone`: the model's table needs `$table->vector('embedding', 1536)` (or the column named by `searchableEmbeddingColumn()`) with the `AsVector` cast.
+- `matrixone-index`: set `'embedding' => 1536` in the model's `index-settings`; the index table gets the vector column. Without it `->semantic()` / `->hybrid()` throw a `ScoutException`.
+- The dimensions must match the embedding model exactly (e.g. 1536 for `text-embedding-3-small`); changing the model means `scout:delete-index` + `scout:import`.
+- An empty string or a missing `toSearchableEmbedding()` stores NULL: the record is still found by text search but never by semantic search.
+- Search terms are embedded the same way, so `->semantic()` / `->hybrid()` need `laravel/ai` configured even when documents store arrays.
+
+```php
+Article::search('how to store songs')->semantic()->get();             // cosine distance <= 1 - 0.6
+Article::search('how to store songs')->semantic(minSimilarity: 0.8)->get();
+Article::search('songs')->where('status', 'published')->hybrid()->get(); // filters still apply
+Article::search('songs')->hybrid(textWeight: 1, semanticWeight: 2)->get();
+```
+
+- Hybrid search merges the full-text ranking and the semantic ranking with reciprocal rank fusion (`weight / (60 + rank)`): records found by both come first.
+- `orderBy()` cannot be combined with `->semantic()` / `->hybrid()` (throws); order comes from similarity.
+- `matrixone-index` keeps at most 1000 candidates per ranking, so `paginate()->total()` is capped at 1000 for semantic and hybrid searches.
+- `matrixone-index` creates no vector index on the index table: semantic search scans every row. Fine for tens of thousands of documents; for more, add an IVF-Flat index to the index table yourself after `scout:index`: `Schema::connection('matrixone_search')->table('articles', fn (Blueprint $table) => $table->vectorIndex('embedding')->lists(100));`.
+- In tests, extend the engine and override `generateEmbeddings(array $inputs): array` to return fixed vectors instead of calling an AI provider.
 
 ## Laravel Pulse and Telescope
 
