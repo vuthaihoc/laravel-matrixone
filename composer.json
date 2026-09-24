@@ -49,7 +49,8 @@
         "psr-4": {
             "MatrixOne\\Tests\\Unit\\": "tests/Unit/",
             "MatrixOne\\Tests\\Feature\\": "tests/Feature/",
-            "MatrixOne\\Tests\\KnownIssues\\": "tests/KnownIssues/"
+            "MatrixOne\\Tests\\KnownIssues\\": "tests/KnownIssues/",
+            "MatrixOne\\Tests\\Monitoring\\": "tests/Monitoring/"
         }
     },
     "extra": {
@@ -63,6 +64,8 @@
         "test": "phpunit --colors",
         "test:unit": "phpunit --colors --testsuite=Unit",
         "test:feature": "phpunit --colors --testsuite=Feature",
+        "test:monitoring": "phpunit --colors --testsuite=Monitoring",
+        "test:all": "phpunit --colors --testsuite=Unit,Feature,Monitoring",
         "phpstan": "phpstan analyse --memory-limit=-1",
         "cs": "pint src tests --test",
         "cs:fix": "pint src tests",

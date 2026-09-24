@@ -18,6 +18,10 @@
     <testsuite name="Feature">
       <directory>tests/Feature</directory>
     </testsuite>
+    <!-- Statement history and slow queries: slow, waits for MatrixOne to publish statements. -->
+    <testsuite name="Monitoring">
+      <directory>tests/Monitoring</directory>
+    </testsuite>
     <!-- Known MatrixOne bugs: expected to fail until fixed upstream. -->
     <testsuite name="KnownIssues">
       <directory>tests/KnownIssues</directory>

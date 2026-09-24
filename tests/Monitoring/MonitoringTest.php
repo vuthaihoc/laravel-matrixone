@@ -1,6 +1,6 @@
 <?php
 
-namespace MatrixOne\Tests\Feature;
+namespace MatrixOne\Tests\Monitoring;
 
 use Carbon\CarbonImmutable;
 use Illuminate\Database\QueryException;
@@ -11,7 +11,13 @@ use InvalidArgumentException;
 use MatrixOne\MatrixOneConnection;
 use MatrixOne\Monitoring\ExecutionPlan;
 use MatrixOne\Monitoring\StatementLogQuery;
+use MatrixOne\Tests\Feature\TestCase;
 
+/**
+ * MatrixOne publishes statements to system.statement_info a few seconds
+ * after they run, so these tests wait and are slow: they form their own
+ * suite, excluded from `composer test` (run `composer test:monitoring`).
+ */
 class MonitoringTest extends TestCase
 {
     protected function setUp(): void
@@ -40,12 +46,14 @@ class MonitoringTest extends TestCase
     }
 
     /**
-     * Wait until MatrixOne has published the statement tagged $tag (a few
-     * seconds after it ran).
+     * Wait until MatrixOne has published the statement tagged $tag: usually
+     * a few seconds after it ran, sometimes more than 15.
      */
     private function waitForStatement(string $tag, ?callable $scope = null): object
     {
-        for ($attempt = 0; $attempt < 30; $attempt++) {
+        $deadline = microtime(true) + 60;
+
+        while (microtime(true) < $deadline) {
             $query = $this->connection()->statementLog()->since('10m')->summary()
                 ->whereLike('statement', "%{$tag}%")
                 ->whereNotLike('statement', '%statement_info%');
@@ -103,10 +111,12 @@ class MonitoringTest extends TestCase
         $this->assertContains('Project', array_column($plan->nodes(), 'name'));
         $this->assertGreaterThanOrEqual(1000, max(array_column($plan->nodes(), 'time_ms')));
 
-        // A faster statement keeps none.
-        $fast = 'mon_fast_'.bin2hex(random_bytes(4));
-        DB::select("select sleep(0.2) as s, '{$fast}' as tag");
-        $this->assertNull($this->connection()->getStatementPlan($this->waitForStatement($fast)->statement_id));
+        // A faster statement keeps none. (Fast statements of one shape may be
+        // merged into a single row, so pick any recent unmerged one.)
+        $fast = $this->connection()->statementLog()->since('1d')
+            ->where('duration', '<', 100_000_000)->where('aggr_count', 0)->value('statement_id');
+        $this->assertIsString($fast);
+        $this->assertNull($this->connection()->getStatementPlan($fast));
 
         $this->assertNull($this->connection()->getStatementPlan('00000000-0000-0000-0000-000000000000'));
 
