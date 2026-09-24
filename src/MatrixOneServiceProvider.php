@@ -13,6 +13,7 @@ use MatrixOne\Connectors\MatrixOneConnector;
 use MatrixOne\Console\DbCommand;
 use MatrixOne\Pulse\MatrixOneStorage;
 use MatrixOne\Scout\MatrixOneEngine;
+use MatrixOne\Scout\MatrixOneIndexEngine;
 
 class MatrixOneServiceProvider extends ServiceProvider
 {
@@ -38,6 +39,10 @@ class MatrixOneServiceProvider extends ServiceProvider
         if (class_exists(EngineManager::class)) {
             $this->app->resolving(EngineManager::class, function (EngineManager $manager) {
                 $manager->extend('matrixone', fn () => new MatrixOneEngine);
+                $manager->extend('matrixone-index', fn ($app) => new MatrixOneIndexEngine(
+                    $app['db'],
+                    (array) $app['config']->get('scout.matrixone-index', [])
+                ));
             });
         }
 
