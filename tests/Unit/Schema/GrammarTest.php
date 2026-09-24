@@ -239,4 +239,33 @@ class GrammarTest extends TestCase
         $this->assertStringContainsString("'system_metrics'", $grammar->compileSchemas());
         $this->assertStringStartsWith('select if(exists (', $grammar->compileTableExists(null, 'users'));
     }
+
+    public function testClusterBy(): void
+    {
+        $sql = $this->blueprintSql('metrics', function (Blueprint $table) {
+            $table->dateTime('ts');
+            $table->string('device');
+            $table->unique(['device', 'ts']);
+            $table->clusterBy(['device', 'ts']);
+        }, create: true);
+
+        $this->assertStringEndsWith(' cluster by (`device`, `ts`)', $sql[0]);
+    }
+
+    public function testClusterByRejectsPrimaryKeys(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        $this->blueprintSql('metrics', function (Blueprint $table) {
+            $table->id();
+            $table->clusterBy('id');
+        }, create: true);
+    }
+
+    public function testClusterByOnlyWhenCreating(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        $this->blueprintSql('metrics', fn (Blueprint $table) => $table->clusterBy('ts'));
+    }
 }

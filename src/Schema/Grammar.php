@@ -143,6 +143,16 @@ class Grammar extends MySqlGrammar
             $sql .= ' auto_increment = '.$value;
         }
 
+        if ($clusterBy = $this->getCommandByName($blueprint, 'clusterBy')) {
+            if ($this->hasPrimaryKey($blueprint)) {
+                throw new InvalidArgumentException(
+                    'MatrixOne cannot cluster a table that has a primary key; drop the primary key (a unique index is allowed).'
+                );
+            }
+
+            $sql .= ' cluster by ('.$this->columnize($clusterBy->columns).')';
+        }
+
         return $sql;
     }
 
@@ -541,6 +551,37 @@ class Grammar extends MySqlGrammar
         }
 
         return null;
+    }
+
+    /**
+     * CLUSTER BY is part of CREATE TABLE (see compileCreate()); MatrixOne
+     * cannot add it to an existing table.
+     */
+    public function compileClusterBy(Blueprint $blueprint, Fluent $command): ?string
+    {
+        if (! $this->creatingTable($blueprint)) {
+            throw new InvalidArgumentException('MatrixOne only accepts CLUSTER BY when the table is created.');
+        }
+
+        return null;
+    }
+
+    /**
+     * Determine if the created table gets a primary key.
+     */
+    protected function hasPrimaryKey(Blueprint $blueprint): bool
+    {
+        if ($this->getCommandByName($blueprint, 'primary')) {
+            return true;
+        }
+
+        foreach ($blueprint->getAddedColumns() as $column) {
+            if ($column->primary || $column->autoIncrement) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

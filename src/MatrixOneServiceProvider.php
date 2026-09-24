@@ -11,6 +11,8 @@ use Laravel\Pulse\Storage\DatabaseStorage as PulseDatabaseStorage;
 use Laravel\Scout\EngineManager;
 use MatrixOne\Connectors\MatrixOneConnector;
 use MatrixOne\Console\DbCommand;
+use MatrixOne\Console\PitrCommand;
+use MatrixOne\Console\SnapshotCommand;
 use MatrixOne\Pulse\MatrixOneStorage;
 use MatrixOne\Scout\MatrixOneEngine;
 use MatrixOne\Scout\MatrixOneIndexEngine;
@@ -60,6 +62,10 @@ class MatrixOneServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        if ($this->app->runningInConsole()) {
+            $this->commands([SnapshotCommand::class, PitrCommand::class]);
+        }
+
         if ($this->app->runningInConsole() && class_exists(PulseDatabaseStorage::class)) {
             $this->publishes([
                 __DIR__.'/../database/pulse' => $this->app->databasePath('migrations'),
@@ -78,6 +84,13 @@ class MatrixOneServiceProvider extends ServiceProvider
         Blueprint::macro('vector64', function (string $column, int $dimensions): ColumnDefinition {
             /** @var Blueprint $this */
             return $this->addColumn('vector64', $column, ['dimensions' => $dimensions]);
+        });
+
+        // CLUSTER BY: sort the table's data by these columns (analytics).
+        Blueprint::macro('clusterBy', function (array|string $columns) {
+            /** @var Blueprint $this */
+            // @phpstan-ignore method.protected (macros are bound to the Blueprint)
+            return $this->addCommand('clusterBy', ['columns' => (array) $columns]);
         });
 
         // Laravel 13 ships vectorIndex()/dropVectorIndex(); older releases get
