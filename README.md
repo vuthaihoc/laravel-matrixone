@@ -96,7 +96,9 @@ Document::whereVectorSimilarTo('embedding', [0.1, 0.2, 0.25], minSimilarity: 0.8
 The package ships [Laravel Boost](https://github.com/laravel/boost) resources, picked up automatically when you run `php artisan boost:install` (or `boost:update`):
 
 - a guideline (`resources/boost/guidelines/core.blade.php`) with the rules an AI agent must follow on MatrixOne, such as no FULLTEXT index on a table with foreign keys, case-sensitive `=` and no JSON defaults;
-- a `matrixone-development` skill (`resources/boost/skills/matrixone-development/SKILL.md`) covering schema design, queries, full-text, vectors, session variables and known server bugs.
+- a `matrixone-development` skill (`resources/boost/skills/matrixone-development/SKILL.md`) covering schema design, queries, full-text, vectors, Scout, session variables and known server bugs.
+
+See [AI Assistants](docs/docs/boost.md) for installation, updates, customization and use without Boost.
 
 ## Documentation
 
@@ -110,6 +112,7 @@ The package ships [Laravel Boost](https://github.com/laravel/boost) resources, p
 | [Integrations](docs/docs/integrations.md) | Laravel Scout (in-table and separate index), Pulse and Telescope |
 | [Schema](docs/docs/schema.md) | Column types, indexes, vector indexes, introspection |
 | [Testing](docs/docs/testing.md) | Laravel testing traits on MatrixOne |
+| [AI Assistants](docs/docs/boost.md) | Laravel Boost guideline and `matrixone-development` skill |
 | [Compatibility](docs/docs/compatibility.md) | Every MatrixOne difference the driver handles or rejects |
 
 ## Testing
