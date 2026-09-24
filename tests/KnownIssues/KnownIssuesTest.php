@@ -410,4 +410,27 @@ class KnownIssuesTest extends TestCase
     {
         $this->assertEquals([['t' => 1, 'f' => 0]], $this->runSql('select 1 = 1 as t, 1 = 2 as f'));
     }
+
+    /**
+     * RESTORE ... FROM SNAPSHOT, as documented, is a syntax error on 4.2.4.
+     * Driver workaround: none; read the snapshot with asOfSnapshot() and copy
+     * the rows back (see docs/docs/analytics.md).
+     */
+    public function testRestoreTableFromSnapshot(): void
+    {
+        try {
+            $rows = $this->runSql(
+                'create table rs_items (id int)',
+                'insert into rs_items values (1), (2)',
+                'create snapshot rs_items_snap for table '.self::DATABASE.' rs_items',
+                'delete from rs_items where id = 2',
+                'restore account sys database '.self::DATABASE.' table rs_items from snapshot rs_items_snap',
+                'select count(*) as n from rs_items',
+            );
+        } finally {
+            self::connect()->exec('drop snapshot if exists rs_items_snap');
+        }
+
+        $this->assertEquals([['n' => 2]], $rows);
+    }
 }
