@@ -369,7 +369,7 @@ class MatrixOneConnection extends MySqlConnection
      *     $db->statementLog()->slowerThan(500)->slowest()->summary()->limit(20)->get();
      *     $db->statementLog()->since('1d')->failed()->latest('request_at')->get();
      *
-     * Statements appear a few seconds after they finish. Short, repeated
+     * Statements appear seconds (sometimes more than 15) after they finish. Short, repeated
      * statements are merged into one row ("/* N queries *\/", aggr_count).
      */
     public function statementLog(): StatementLogQuery

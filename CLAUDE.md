@@ -10,6 +10,7 @@ A Laravel database driver for MatrixOne (MySQL wire protocol, default port 6001)
 
 - `composer test` — PHPUnit (unit + feature). Feature tests need MatrixOne on 127.0.0.1:6001 (`cd docker/standalone && docker compose up -d`). Docker setups for a standalone and an S3-backed server live in `docker/`, documented in `docs/docs/docker.md`.
 - `composer test:unit` / `composer test:feature`
+- `composer test:monitoring` — `tests/Monitoring`: statement history, plans and `matrixone:slow-queries`. Slow (waits for MatrixOne to publish statements), so excluded from `composer test`; `composer test:all` runs Unit, Feature and Monitoring.
 - `composer test:known-issues` — `tests/KnownIssues`: open MatrixOne bugs in plain SQL, asserting MySQL behaviour. Excluded from `composer test`; failures are expected until MatrixOne fixes them.
 - `vendor/bin/phpunit --filter TestName` — a single test
 - `composer phpstan` — PHPStan level 9
@@ -57,7 +58,7 @@ Local runs may use a gitignored `phpunit.xml` (copied from `phpunit.xml.dist`) t
 
 ## Release Checklist
 
-1. `composer cs`, `composer phpstan` and `composer test` pass with zero errors (MatrixOne running locally).
+1. `composer cs`, `composer phpstan` and `composer test:all` pass with zero errors (MatrixOne running locally).
 2. `composer.json`, `LICENSE` and `README.md` are accurate; no placeholder text or broken links.
 3. `cd docs && npx vitepress build` succeeds; `docs/.vitepress/config.ts` base matches the GitHub Pages path (`/laravel-matrixone/`).
 4. Working tree clean and pushed.

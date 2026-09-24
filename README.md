@@ -121,8 +121,11 @@ See [AI Assistants](docs/docs/boost.md) for installation, updates, customization
 
 ```bash
 (cd docker/standalone && docker compose up -d)   # MatrixOne 4.2.4 on 127.0.0.1:6001 (root / 111)
-composer test
+composer test               # the database driver (Unit + Feature)
+composer test:monitoring    # statement history and slow queries (slow, separate suite)
 ```
+
+See [Testing](docs/docs/testing.md) for every suite.
 
 ## TODO
 

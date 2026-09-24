@@ -52,7 +52,7 @@ DB::connection('matrixone')->statementLog()->includeInternal()->count();
 Good to know:
 
 - **Times are UTC.** `request_at` is stored in UTC whatever the session time zone. `since()` converts a `DateTimeInterface` to UTC.
-- **Statements appear a few seconds after they finish** (about 2 s locally).
+- **Statements appear some time after they finish:** usually a few seconds, sometimes more than 15.
 - **Short, repeated statements are merged** into one row whose text starts with `/* N queries */`: `aggr_count` is N, and `duration` is their total.
 - **Always filter by time** (`since()` does). The table grows quickly (hundreds of thousands of rows a day on a busy server), and an unfiltered scan takes seconds.
 - MatrixOne's documentation creates views such as `slow_query` for this purpose. They only cover `SELECT` statements above 1 second and scan the whole table. `statementLog()` covers every statement type, takes any threshold and filters by time.

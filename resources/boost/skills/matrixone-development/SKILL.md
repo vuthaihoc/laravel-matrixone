@@ -149,7 +149,7 @@ $db->tableStats('orders');                        // rows, size (refreshed ~1 mi
 ```
 
 - `php artisan matrixone:slow-queries --since=1h --min=500`, `--failed`, `--type=Select`, `--plan=<statement id>`.
-- Times in `statement_info` are UTC; statements appear a few seconds after they finish; short repeated statements are merged (`/* N queries */`, `aggr_count`). Always filter by time.
+- Times in `statement_info` are UTC; statements appear seconds (sometimes 15+ s) after they finish; short repeated statements are merged (`/* N queries */`, `aggr_count`). Always filter by time.
 - For a query you can re-run, `DB::select('explain analyze '.$query->toRawSql())`.
 - Do not use `mo_table_rows()` for exact counts right after writes.
 

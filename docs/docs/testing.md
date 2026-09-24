@@ -39,9 +39,13 @@ Point the test environment at a dedicated database in `phpunit.xml`:
 ## Running this package's test suite
 
 ```bash
-composer test               # Unit + Feature
+composer test               # Unit + Feature: the Laravel database driver
+composer test:monitoring    # statement history and slow queries (slow)
+composer test:all           # Unit + Feature + Monitoring
 composer test:known-issues  # open MatrixOne bugs, expected to fail (see Compatibility)
 ```
+
+The `Monitoring` suite waits for MatrixOne to publish statements to `system.statement_info` (a few seconds each), so it is kept out of `composer test`. Run it when changing `statementLog()`, `tableStats()` or `matrixone:slow-queries`, and before a release.
 
 The `KnownIssues` suite is excluded from `composer test`; each test asserts MySQL's behaviour, so a passing test means a MatrixOne release fixed that issue.
 
