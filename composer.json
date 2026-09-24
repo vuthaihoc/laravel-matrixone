@@ -37,7 +37,8 @@
         "phpunit/phpunit": "^11.3"
     },
     "suggest": {
-        "laravel/scout": "Full-text, semantic and hybrid search with SCOUT_DRIVER=matrixone"
+        "laravel/scout": "Full-text, semantic and hybrid search with SCOUT_DRIVER=matrixone or matrixone-index",
+        "ext-intl": "Accent folding for full-text search (TextNormalizer, matrixone-index fold_accents)"
     },
     "autoload": {
         "psr-4": {

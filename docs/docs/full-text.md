@@ -247,6 +247,26 @@ Article::search('songs')->hybrid()->get();                // rank fusion of both
 
 The table needs a `vector('embedding', <dimensions>)` column (or the column named by `searchableEmbeddingColumn()`) and, for full-text columns, a FULLTEXT index; keep that table free of foreign keys (MatrixOne 4.2.4). Embeddings of search terms are generated with the [Laravel AI SDK](https://github.com/laravel/ai) (`laravel/ai`).
 
+To keep your models in another database and use MatrixOne only as the search index (like Meilisearch), use the `matrixone-index` engine: see [Integrations › MatrixOne as a separate search index](./integrations#matrixone-as-a-separate-search-index).
+
+## Languages
+
+MatrixOne's full-text search has no notion of language, unlike MySQL/InnoDB stopword lists or PostgreSQL's text search configurations (`to_tsvector('english', ...)`). The default parser splits text into words, and the `ngram` parser into character n-grams. Measured on 4.2.4:
+
+| Behaviour | MatrixOne | Consequence |
+|-----------|-----------|-------------|
+| Stemming | none | `learn` does not match `learning` |
+| Stopwords | none | `the`, `and` are indexed and matched |
+| Case | insensitive | `MatrixOne` matches `matrixone` |
+| Accents | significant | `tieng` does not match `tiếng` |
+| CJK | works (`ngram` recommended) | `中文` matches |
+
+Workarounds:
+
+- **Prefixes instead of stems:** `FullTextQuery::anyOf($term, prefix: true)` (`learn*`), or `->prefix('learn')`.
+- **Accents:** store and search a folded copy with `MatrixOne\Support\TextNormalizer::foldAccents()` (needs `ext-intl`); `Tiếng Việt Đà Nẵng` becomes `Tieng Viet Da Nang`. The `matrixone-index` Scout engine does this with `'fold_accents' => true`.
+- **Stopwords:** remove them from the search term in PHP if they hurt ranking; BM25 (`ft_relevancy_algorithm`) already gives frequent words little weight.
+
 ## Limitations
 
 - **MatrixOne 4.2.4 crash:** inserting into a table that has both its own foreign key and a FULLTEXT index panics in the query planner. Keep full-text indexes on tables without foreign keys (being *referenced* by a foreign key is fine).

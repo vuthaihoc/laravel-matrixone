@@ -19,6 +19,7 @@ MatrixOne speaks the MySQL 8.0 protocol but implements a subset of MySQL. This p
 | `LIKE` ignores `_ci` collations | `like` / `whereLike()` compile to `cast(col as text) ilike` |
 | `ILIKE` rejects numbers and dates | Columns are cast to text first |
 | Natural language full-text mode only matches words appearing together | `FullTextQuery::anyOf()` and the Scout engine use boolean mode (any word) |
+| Full-text has no stemming, stopwords or accent folding | `FullTextQuery::anyOf(prefix: true)`, `TextNormalizer::foldAccents()`, `matrixone-index` options; see [Full-text › Languages](./full-text#languages) |
 | `MATCH ... AGAINST` cannot be OR-ed with other conditions | The Scout engine uses a subquery; see [Full-text › Limitations](./full-text#limitations) |
 | `LAST_INSERT_ID()` is wrong on tables with a FULLTEXT index | `insertGetId()` uses `insert ... returning` |
 | Identifiers are limited to 64 characters | Long index names are shortened consistently |

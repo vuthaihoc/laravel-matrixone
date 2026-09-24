@@ -128,6 +128,12 @@ DB::connection('matrixone')->withSessionVariables(['experimental_fulltext2_index
 
 Useful variables: `ft_relevancy_algorithm` (`TF-IDF`/`BM25`, typos are accepted silently), `fulltext_bloom_filter_pushdown`, `experimental_fulltext2_index`, `experimental_hnsw_index`. `ngram_token_size` is global only.
 
+## Laravel Scout
+
+- `SCOUT_DRIVER=matrixone`: models stored in MatrixOne; full-text columns, relevance ordering, `->semantic()` and `->hybrid()` on a vector column. Do not use Scout's `database` engine for models with full-text columns.
+- `SCOUT_DRIVER=matrixone-index`: models stored in any database, MatrixOne used as a separate search index. Configure `config('scout.matrixone-index')`: `connection` and `index-settings` per model (`fulltext`, `filterable`, `sortable` with types, `parser`, `fold_accents`, `prefix`, `mode`, `embedding`). Every attribute used in `where`/`whereIn`/`orderBy` must be declared as filterable or sortable.
+- Full-text has no language support: no stemming (`learn` ≠ `learning`), no stopwords, accents significant (`tieng` ≠ `tiếng`). Use `prefix`, `fold_accents` / `TextNormalizer::foldAccents()` and the `ngram` parser for CJK.
+
 ## Laravel Pulse and Telescope
 
 - Pulse: publish the package's migration (`php artisan vendor:publish --tag=matrixone-pulse-migrations`) instead of Pulse's; the MatrixOne storage is bound automatically.
