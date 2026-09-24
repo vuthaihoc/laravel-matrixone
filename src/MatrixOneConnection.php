@@ -5,10 +5,13 @@ namespace MatrixOne;
 use Closure;
 use Exception;
 use Illuminate\Database\MySqlConnection;
+use Illuminate\Database\Query\Expression;
 use Illuminate\Database\QueryException;
 use Illuminate\Filesystem\Filesystem;
 use InvalidArgumentException;
 use MatrixOne\Connectors\MatrixOneConnector;
+use MatrixOne\Monitoring\ExecutionPlan;
+use MatrixOne\Monitoring\StatementLogQuery;
 use MatrixOne\Query\Builder as QueryBuilder;
 use MatrixOne\Query\Grammar as QueryGrammar;
 use MatrixOne\Query\Processors\MatrixOneProcessor;
@@ -357,6 +360,72 @@ class MatrixOneConnection extends MySqlConnection
     public function getPitrs(): array
     {
         return $this->lowerCaseKeys($this->select('show pitr'));
+    }
+
+    /**
+     * Query MatrixOne's statement history (system.statement_info): by default
+     * the application's statements on this database in the last hour.
+     *
+     *     $db->statementLog()->slowerThan(500)->slowest()->summary()->limit(20)->get();
+     *     $db->statementLog()->since('1d')->failed()->latest('request_at')->get();
+     *
+     * Statements appear a few seconds after they finish. Short, repeated
+     * statements are merged into one row ("/* N queries *\/", aggr_count).
+     */
+    public function statementLog(): StatementLogQuery
+    {
+        $query = new StatementLogQuery($this, $this->getQueryGrammar(), $this->getPostProcessor());
+
+        return $query->from(new Expression('`system`.`statement_info`'))->withDefaults($this->getDatabaseName());
+    }
+
+    /**
+     * The execution plan MatrixOne recorded for a statement, or null when it
+     * kept none: plans are only recorded for statements running for at least
+     * `longQueryTime` (1 second by default).
+     */
+    public function getStatementPlan(string $statementId): ?ExecutionPlan
+    {
+        $json = $this->statementLog()->includeInternal()->allDatabases()->since('30d')
+            ->where('statement_id', $statementId)->value('exec_plan');
+
+        return ExecutionPlan::fromJson(is_string($json) ? $json : null);
+    }
+
+    /**
+     * Statistics of a table: MatrixOne's row count and storage size (both
+     * refreshed asynchronously, up to about a minute late), its number of
+     * columns and, with $values, the minimum and maximum of every column.
+     *
+     * @return array{rows: int, size: int, columns: int, values: array<string, array{min: mixed, max: mixed}>}
+     */
+    public function tableStats(string $table, bool $values = true): array
+    {
+        $database = $this->getDatabaseName();
+        $table = $this->getTablePrefix().$table;
+        $qualified = $this->wrapIdentifier($database).'.'.$this->wrapIdentifier($table);
+
+        $counts = (array) $this->selectOne('select mo_table_rows(?, ?) as `rows`, mo_table_size(?, ?) as `size`', [$database, $table, $database, $table]);
+        $columns = array_values((array) $this->selectOne('show column_number from '.$qualified));
+
+        $stats = [
+            'rows' => is_numeric($counts['rows'] ?? null) ? (int) $counts['rows'] : 0,
+            'size' => is_numeric($counts['size'] ?? null) ? (int) $counts['size'] : 0,
+            'columns' => is_numeric($columns[0] ?? null) ? (int) $columns[0] : 0,
+            'values' => [],
+        ];
+
+        if ($values) {
+            foreach ((array) $this->selectOne('show table_values from '.$qualified) as $key => $value) {
+                if (preg_match('/^(max|min)\((.+)\)$/i', (string) $key, $matches)) {
+                    $stats['values'][$matches[2]][strtolower($matches[1])] = $value;
+                }
+            }
+
+            $stats['values'] = array_map(fn (array $range) => ['min' => $range['min'] ?? null, 'max' => $range['max'] ?? null], $stats['values']);
+        }
+
+        return $stats;
     }
 
     /**
