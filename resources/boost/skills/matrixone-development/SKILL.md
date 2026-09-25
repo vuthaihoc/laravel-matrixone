@@ -240,7 +240,7 @@ Article::search('songs')->hybrid(textWeight: 1, semanticWeight: 2)->get();
 
 | **Silently wrong results** (`NULL` values) | A correlated scalar subquery with `limit`, e.g. `addSelect(['last' => Post::select('title')->whereColumn('user_id', 'users.id')->latest()->limit(1)])` | Use `hasOne(...)->latestOfMany()` / `ofMany()` relationships or aggregate subqueries (`max()`) |
 | `aggregate function sum, bad value [VARCHAR]` | `null as col` placeholders in a `UNION` | `cast(null as double) as col` |
-| **Silently wrong order** | A `desc` key after a boolean key: `orderByRaw('score is null, score desc')` | `orderBy('score', 'desc')` already sorts NULLs last; use `is null, x asc` only for ascending order |
+| **Silently wrong order** | A `desc` key after a boolean key: `orderByRaw('score is null, score desc')` | `orderBy('score', 'desc')` already sorts NULLs last; use `is null, x asc` only for ascending order; after a boolean key, wrap the DESC key: `coalesce(ratio, 0) desc` |
 
 After a server panic the driver drops the broken connection (and forgets its transaction) so later queries reconnect instead of hanging.
 
