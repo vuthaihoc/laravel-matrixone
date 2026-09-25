@@ -16,8 +16,10 @@ A [MatrixOne](https://github.com/matrixorigin/matrixone) database driver for Lar
 ## Installation
 
 ```bash
-composer require vuthaihoc/laravel-matrixone
+composer require vuthaihoc/laravel-matrixone:^1.0@beta
 ```
+
+The package is in beta until `v1.0.0`: the `@beta` flag lets Composer install it in projects with the default `minimum-stability`.
 
 Add a connection to `config/database.php`:
 
@@ -146,6 +148,11 @@ Towards full parity with Laravel's MySQL and PostgreSQL drivers:
 - [ ] Compatibility matrix across MatrixOne 4.2.x releases
 - [ ] Release `v1.0.0` on Packagist and publish the docs site
 - [ ] Benchmarks against MySQL
+
+## Related packages
+
+- [vuthaihoc/laravel-db-portable](https://github.com/vuthaihoc/laravel-db-portable): query builder macros that compile for MatrixOne, MySQL, PostgreSQL/CockroachDB and SQLite, and `scan` / `audit` / `copy` commands for moving an application to MatrixOne.
+- [vuthaihoc/cockroachdb-laravel](https://github.com/vuthaihoc/crdb2025): the CockroachDB driver used on the other side of such a move.
 
 ## Credits
 

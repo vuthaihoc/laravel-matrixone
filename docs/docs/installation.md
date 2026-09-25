@@ -17,8 +17,10 @@
 ## Install the package
 
 ```bash
-composer require vuthaihoc/laravel-matrixone
+composer require vuthaihoc/laravel-matrixone:^1.0@beta
 ```
+
+The package is in beta until `v1.0.0`: the `@beta` flag lets Composer install it in projects with the default `minimum-stability`.
 
 The service provider is auto-discovered. It registers the `matrixone` database driver.
 
