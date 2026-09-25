@@ -433,4 +433,21 @@ class KnownIssuesTest extends TestCase
 
         $this->assertEquals([['n' => 2]], $rows);
     }
+
+    /**
+     * A DESC key after a boolean ORDER BY key is ignored:
+     * `order by score is null, score desc` keeps insertion order.
+     * Workaround (laravel-db-portable's orderByNullsLast): `score desc`
+     * already sorts NULLs last on MySQL-family databases.
+     */
+    public function testDescendingKeyAfterBooleanKey(): void
+    {
+        $rows = $this->runSql(
+            'create table ob_items (id int primary key, score int)',
+            'insert into ob_items values (1, 5), (2, null), (3, 7), (4, null), (5, 6)',
+            'select id from ob_items order by score is null, score desc, id',
+        );
+
+        $this->assertSame([3, 5, 1, 2, 4], array_map(fn ($row) => (int) $row['id'], $rows));
+    }
 }
