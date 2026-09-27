@@ -22,8 +22,79 @@ features:
     details: Standard `artisan migrate`, `migrate:fresh` and `db:wipe`, with schema introspection adapted to MatrixOne's catalog.
   - title: Real transactions
     details: MatrixOne is ACID, so Laravel's own RefreshDatabase and DatabaseTransactions testing traits work unchanged.
+  - title: Full-text search
+    details: FULLTEXT indexes with relevance ranking in the query builder, and two Laravel Scout drivers — search inside your MatrixOne tables, or use MatrixOne as a separate search index.
+    link: /docs/full-text
   - title: Vector search
     details: vecf32 / vecf64 columns, IVF-Flat and HNSW indexes, an AsVector cast and nearest-neighbour queries.
   - title: MatrixOne-aware
     details: Works around MatrixOne quirks (boolean results, savepoints, TRUNCATE with foreign keys) and fails clearly on unsupported features.
 ---
+
+## Full-text search, two ways
+
+MatrixOne has native FULLTEXT indexes (BM25 or TF-IDF ranking, an `ngram` parser for Chinese, Japanese and Korean). The package exposes them in two ways.
+
+### 1. Built in: query builder and Eloquent
+
+For models stored in MatrixOne. Create the index in a migration and query it like any Laravel full-text search, with relevance ranking:
+
+```php
+Schema::create('articles', function (Blueprint $table) {
+    $table->id();                       // MatrixOne needs a primary key for FULLTEXT
+    $table->string('title');
+    $table->text('body');
+    $table->fullText(['title', 'body'])->parser('ngram');   // parser optional
+});
+
+Article::whereFullText(['title', 'body'], 'vector database')->get();
+Article::searchFullText(['title', 'body'], $term)->limit(20)->get();      // filter + order by relevance
+Article::select('id')->selectFullTextRelevance(['title', 'body'], $term, as: 'score')->get();
+
+// Boolean queries: +must -exclude "phrases" prefix*
+use MatrixOne\Support\FullTextQuery;
+
+Article::searchFullText(['title', 'body'],
+    FullTextQuery::make()->must('laravel')->mustNot('legacy')->prefix('match')
+)->get();
+Article::searchFullText('body', FullTextQuery::anyOf($userInput))->get();   // any word, like a search box
+```
+
+[Full-text Search guide →](/docs/full-text)
+
+### 2. Laravel Scout drivers
+
+**`SCOUT_DRIVER=matrixone`** searches the model's own MatrixOne table: full-text and `LIKE` columns, relevance ordering, and semantic or hybrid search on a vector column.
+
+```php
+#[SearchUsingFullText(['title', 'body'])]
+public function toSearchableArray(): array { /* ... */ }
+
+Article::search('vector database')->get();               // full-text, by relevance
+Article::search('how to store songs')->semantic()->get(); // cosine similarity
+Article::search('songs')->hybrid()->get();                // rank fusion of both
+```
+
+**`SCOUT_DRIVER=matrixone-index`** uses a separate MatrixOne database as the search index, like Meilisearch or Algolia. Your models can stay in MySQL, PostgreSQL, CockroachDB or SQLite:
+
+```php
+// config/scout.php
+'matrixone-index' => [
+    'connection' => 'matrixone_search',
+    'index-settings' => [
+        Article::class => [
+            'fulltext' => ['title', 'body'],
+            'filterable' => ['status', 'author_id' => 'integer'],
+            'sortable' => ['published_at' => 'datetime'],
+            'fold_accents' => true,   // "tieng viet" matches "Tiếng Việt"
+            'prefix' => true,         // "learn" matches "learning"
+            'embedding' => 1536,      // enables ->semantic() and ->hybrid()
+        ],
+    ],
+],
+
+Article::search('laravel')->where('status', 'published')->orderBy('published_at', 'desc')->paginate(20);
+```
+
+[Scout integration guide →](/docs/integrations#laravel-scout)
+
