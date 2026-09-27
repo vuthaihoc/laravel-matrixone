@@ -230,6 +230,7 @@ class MatrixOneConnection extends MySqlConnection
     protected function discardBrokenConnection(): void
     {
         $this->disconnect();
+        $this->rollbackOnly = false;
 
         if ($this->transactions > 0) {
             $this->transactionsManager?->rollback($this->getName() ?? 'matrixone', 0);
@@ -471,6 +472,154 @@ class MatrixOneConnection extends MySqlConnection
     protected function lowerCaseKeys(array $rows): array
     {
         return array_values(array_map(fn ($row) => array_change_key_case((array) $row), $rows));
+    }
+
+    /**
+     * Set when a nested transaction rolled back while the outer one is still
+     * open ('nested_transactions' => 'rollback_only').
+     */
+    protected bool $rollbackOnly = false;
+
+    /**
+     * {@inheritDoc}
+     *
+     * MatrixOne has no ROLLBACK TO SAVEPOINT, so a nested transaction cannot
+     * undo its own writes. By default ('nested_transactions' => 'flatten') the
+     * rollback of a nested level does nothing, as with savepoints disabled.
+     * With 'rollback_only' it marks the whole transaction, and the outermost
+     * commit rolls everything back and throws instead of keeping the writes
+     * the inner transaction meant to undo.
+     *
+     * @param  int  $toLevel
+     */
+    protected function performRollBack($toLevel)
+    {
+        if ($toLevel === 0) {
+            $this->rollbackOnly = false;
+        } elseif ($this->getConfig('nested_transactions') === 'rollback_only') {
+            $this->rollbackOnly = true;
+        }
+
+        parent::performRollBack($toLevel);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * DB::transaction() fires "committing" right before the outermost COMMIT:
+     * a transaction marked rollback-only is rolled back there instead, and
+     * the commit fails. commit() below covers manual transactions.
+     *
+     * @param  string  $event
+     * @return array<mixed>|null
+     */
+    protected function fireConnectionEvent($event)
+    {
+        if ($event === 'committing' && $this->rollbackOnly) {
+            $this->rollbackOnly = false;
+
+            if ($this->getPdo()->inTransaction()) {
+                $this->getPdo()->rollBack();
+            }
+
+            // DB::transaction() lowers the level itself when its commit fails.
+            $this->transactionsManager?->rollback($this->getName() ?? 'matrixone', 0);
+
+            throw $this->nestedRollbackException();
+        }
+
+        return parent::fireConnectionEvent($event);
+    }
+
+    /** {@inheritDoc} */
+    public function commit()
+    {
+        // A manual beginTransaction()/commit(): roll back and leave the connection at level 0.
+        if ($this->rollbackOnly && $this->transactionLevel() === 1) {
+            $this->rollBack(0);
+
+            throw $this->nestedRollbackException();
+        }
+
+        parent::commit();
+    }
+
+    protected function nestedRollbackException(): NestedTransactionRolledBackException
+    {
+        return new NestedTransactionRolledBackException(
+            'A nested transaction was rolled back and MatrixOne cannot undo only its writes (no ROLLBACK TO SAVEPOINT): the whole transaction was rolled back.'
+        );
+    }
+
+    /**
+     * Write a table's committed rows from memory to object storage (S3 in a
+     * S3-backed deployment). Until then recent writes live in the WAL and in
+     * memory; they are durable but not yet in the object store. Needs an
+     * administrative user (root / the sys account's admin).
+     */
+    public function flushTable(string $table): void
+    {
+        $this->runMoCtl('flush', $this->getDatabaseName().'.'.$this->getTablePrefix().$table);
+    }
+
+    /**
+     * Flush several tables, or every table of the connection's database.
+     *
+     * @param  list<string>|null  $tables  unprefixed table names; every table when null
+     * @param  (callable(string, float): void)|null  $progress  called with each table and its duration in seconds
+     * @return list<string> the flushed tables
+     */
+    public function flushTables(?array $tables = null, ?callable $progress = null): array
+    {
+        $prefix = $this->getTablePrefix();
+        $tables ??= array_values(array_map(
+            fn ($table) => $prefix !== '' && str_starts_with((string) $table, $prefix) ? substr((string) $table, strlen($prefix)) : (string) $table,
+            $this->getSchemaBuilder()->getTableListing(schemaQualified: false),
+        ));
+
+        foreach ($tables as $table) {
+            $start = microtime(true);
+            $this->flushTable($table);
+
+            if ($progress) {
+                $progress($table, microtime(true) - $start);
+            }
+        }
+
+        return $tables;
+    }
+
+    /**
+     * Run a checkpoint: every table of every database is written to object
+     * storage and the WAL is truncated. `$global` runs a global checkpoint.
+     * Needs an administrative user.
+     */
+    public function checkpoint(bool $global = false): void
+    {
+        $this->runMoCtl($global ? 'globalcheckpoint' : 'checkpoint', '');
+    }
+
+    /**
+     * Run mo_ctl('dn', $command, $argument) and check its JSON answer.
+     */
+    protected function runMoCtl(string $command, string $argument): void
+    {
+        try {
+            $result = $this->scalar("select mo_ctl('dn', ?, ?)", [$command, $argument]);
+        } catch (Exception $e) {
+            if (str_contains($e->getMessage(), 'do not have privilege')) {
+                throw new RuntimeException("mo_ctl('dn', '{$command}') needs an administrative MatrixOne user (root or the sys account's admin): run it on a separate admin connection.", 0, $e);
+            }
+
+            throw $e;
+        }
+
+        $decoded = is_string($result) ? json_decode($result, true) : null;
+        $status = is_array($decoded) ? ($decoded['result'][0]['returnStr'] ?? null) : null;
+
+        if ($status !== 'OK') {
+            throw new RuntimeException("mo_ctl('dn', '{$command}', '{$argument}') failed: ".(is_scalar($result) ? (string) $result : 'no result'));
+        }
     }
 
     /** {@inheritDoc} */

@@ -150,7 +150,9 @@ class KnownIssuesTest extends TestCase
 
     /**
      * ROLLBACK TO SAVEPOINT is not implemented and aborts the transaction.
-     * Driver workaround: savepoints are disabled, nested transactions are flattened.
+     * Driver workaround: savepoints are disabled, nested transactions are
+     * flattened, or with 'nested_transactions' => 'rollback_only' an inner
+     * rollback makes the outermost commit roll back and throw.
      */
     public function testRollbackToSavepoint(): void
     {
