@@ -143,8 +143,6 @@ class GrammarTest extends TestCase
             'set' => [fn (Blueprint $table) => $table->set('flags', ['a', 'b'])],
             'geometry' => [fn (Blueprint $table) => $table->geometry('shape')],
             'geography' => [fn (Blueprint $table) => $table->geography('shape')],
-            'virtualAs' => [fn (Blueprint $table) => $table->integer('b')->virtualAs('a + 1')],
-            'storedAs' => [fn (Blueprint $table) => $table->integer('b')->storedAs('a + 1')],
         ];
     }
 
@@ -267,5 +265,17 @@ class GrammarTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
 
         $this->blueprintSql('metrics', fn (Blueprint $table) => $table->clusterBy('ts'));
+    }
+
+    public function testGeneratedColumns(): void
+    {
+        $sql = $this->blueprintSql('items', function (Blueprint $table) {
+            $table->integer('a');
+            $table->integer('b')->storedAs('a * 2');
+            $table->integer('c')->virtualAs('a + 1');
+        }, create: true);
+
+        $this->assertStringContainsString('`b` int as (a * 2) stored', $sql[0]);
+        $this->assertStringContainsString('`c` int as (a + 1)', $sql[0]);
     }
 }

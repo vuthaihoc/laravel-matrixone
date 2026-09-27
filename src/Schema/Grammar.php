@@ -240,6 +240,13 @@ class Grammar extends MySqlGrammar
             ));
         }
 
+        if ($type === 'fulltext' && ! $this->tableHasPrimaryKey($blueprint)) {
+            throw new RuntimeException(sprintf(
+                'MatrixOne needs a primary key on [%s] for a FULLTEXT index: add $table->id() or $table->primary(...) first.',
+                $blueprint->getTable()
+            ));
+        }
+
         return sprintf('alter table %s add %s %s(%s)%s',
             $this->wrapTable($blueprint),
             $type,
@@ -437,26 +444,6 @@ class Grammar extends MySqlGrammar
         return parent::modifyNullable($blueprint, $column);
     }
 
-    /** {@inheritDoc} */
-    protected function modifyVirtualAs(Blueprint $blueprint, Fluent $column)
-    {
-        if (! is_null($column->virtualAs) || ! is_null($column->virtualAsJson)) {
-            throw new RuntimeException('Generated columns are not supported by MatrixOne.');
-        }
-
-        return null;
-    }
-
-    /** {@inheritDoc} */
-    protected function modifyStoredAs(Blueprint $blueprint, Fluent $column)
-    {
-        if (! is_null($column->storedAs) || ! is_null($column->storedAsJson)) {
-            throw new RuntimeException('Generated columns are not supported by MatrixOne.');
-        }
-
-        return null;
-    }
-
     /**
      * Determine if the column definition is a JSON column.
      */
@@ -577,6 +564,33 @@ class Grammar extends MySqlGrammar
 
         foreach ($blueprint->getAddedColumns() as $column) {
             if ($column->primary || $column->autoIncrement) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Whether the table has (or is getting, in this blueprint) a primary key.
+     */
+    protected function tableHasPrimaryKey(Blueprint $blueprint): bool
+    {
+        if ($this->hasPrimaryKey($blueprint)) {
+            return true;
+        }
+
+        if ($this->creatingTable($blueprint)) {
+            return false;
+        }
+
+        // `migrate --pretend` runs no query, so the existing indexes are unknown.
+        if ($this->connection->pretending()) {
+            return true;
+        }
+
+        foreach ($this->connection->getSchemaBuilder()->getIndexes($blueprint->getTable()) as $index) {
+            if ($index['primary']) {
                 return true;
             }
         }
