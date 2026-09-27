@@ -27,6 +27,9 @@ features:
     link: /docs/full-text
   - title: Vector search
     details: vecf32 / vecf64 columns, IVF-Flat and HNSW indexes, an AsVector cast and nearest-neighbour queries.
+  - title: Pulse & Telescope
+    details: Store Laravel Pulse metrics and Telescope entries in MatrixOne. Pulse gets a MatrixOne storage and migration; Telescope works with its own migration.
+    link: '#laravel-pulse-and-telescope'
   - title: Companion packages
     details: Works with laravel-db-portable (portable JSON, NULLS LAST and index macros, scan / audit / copy for switching databases) and the CockroachDB driver vuthaihoc/cockroachdb-laravel.
     link: '#companion-packages'
@@ -101,6 +104,33 @@ Article::search('laravel')->where('status', 'published')->orderBy('published_at'
 
 [Scout integration guide →](/docs/integrations#laravel-scout)
 
+## Laravel Pulse and Telescope
+
+Both packages store their data in the database, and both run on MatrixOne. Tests cover recording, aggregation, dashboards and pruning.
+
+**Pulse.** The package binds a MatrixOne storage automatically when Pulse is installed. Publish its migration instead of Pulse's own, which MatrixOne rejects:
+
+```bash
+composer require laravel/pulse
+php artisan vendor:publish --provider="Laravel\Pulse\PulseServiceProvider" --tag=pulse-config
+php artisan vendor:publish --tag=matrixone-pulse-migrations
+php artisan migrate
+```
+
+Keep `PULSE_STORAGE_DRIVER=database`; `pulse.storage.database.connection` may point to a MatrixOne connection. The dashboard's aggregates, graphs and top lists work.
+
+**Telescope.** No change needed: install it as usual, with its own migration.
+
+```bash
+composer require laravel/telescope
+php artisan telescope:install
+php artisan migrate
+```
+
+The database cache, queue and session drivers work too (`CACHE_STORE=database`, `QUEUE_CONNECTION=database`, `SESSION_DRIVER=database`).
+
+[Integrations guide →](/docs/integrations)
+
 ## Companion packages
 
 Packages from the same author, tested together with this driver:
@@ -123,6 +153,3 @@ php artisan migrate --database=matrixone
 php artisan db-portable:audit --from=crdb --to=matrixone     # values that do not fit the new schema
 php artisan db-portable:copy --from=crdb --to=matrixone
 ```
-
-The Laravel packages that use the database also work: Scout (two drivers, above), Pulse (with the package's migration), Telescope, and the database cache, queue and session drivers. See [Integrations](/docs/integrations).
-
