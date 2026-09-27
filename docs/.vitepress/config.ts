@@ -34,6 +34,7 @@ export default defineConfig({
           { text: 'Full-text Search', link: '/docs/full-text' },
           { text: 'Analytics', link: '/docs/analytics' },
           { text: 'Monitoring', link: '/docs/monitoring' },
+          { text: 'Storage and Flushing', link: '/docs/storage' },
           { text: 'Integrations', link: '/docs/integrations' },
           { text: 'Testing', link: '/docs/testing' },
           { text: 'AI Assistants (Boost)', link: '/docs/boost' },

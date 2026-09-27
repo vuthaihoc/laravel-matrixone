@@ -10,10 +10,10 @@ MatrixOne speaks the MySQL 8.0 protocol but implements a subset of MySQL. This p
 | No `insert ... as alias` row alias | `upsert()` uses `values(col)` |
 | Assigning a primary key `on duplicate key` is rejected | `upsert()` never updates its `uniqueBy` columns (Laravel's database cache upserts every column) |
 | No `skip locked` / `nowait` | Dropped from lock clauses; the database queue's `FOR UPDATE SKIP LOCKED` becomes `for update` |
-| No `lock in share mode` / `for share` | Shared locks become `for update` |
 | `RAND()` accepts no seed | The seed is dropped |
 | No `performance_schema` | `threadCount()` counts `information_schema.processlist` |
-| No savepoints | Nested transactions are flattened (see [Eloquent › Transactions](./eloquent#transactions)) |
+| No `ROLLBACK TO SAVEPOINT` | Nested transactions are flattened, or fail the outer commit with `'nested_transactions' => 'rollback_only'` (see [Eloquent › Transactions](./eloquent#transactions)) |
+| A FULLTEXT index needs a primary key (`primary key cannot be empty for fulltext index`) | `fullText()` on a table without a primary key throws a clear error |
 | `json_overlaps()` takes exactly two documents | The JSON path is applied with `json_extract()` |
 | `SET` assignments all read the original row | JSON path updates of one column share one `json_set()` |
 | `LIKE` ignores `_ci` collations | `like` / `whereLike()` compile to `cast(col as text) ilike` |
@@ -49,7 +49,6 @@ MatrixOne speaks the MySQL 8.0 protocol but implements a subset of MySQL. This p
 
 - Full-text query expansion (`whereFullText(..., ['expanded' => true])`)
 - `set()`, `geometry()`, `geography()` columns
-- Generated columns (`virtualAs()`, `storedAs()`)
 - Default values on JSON columns (unless `ignore_json_defaults` is set)
 - Indexes on JSON columns (unless `ignore_json_indexes` is set)
 - `joinLateral()`

@@ -47,5 +47,31 @@ See [Query Builder › Vector search](./query-builder#vector-search) for every v
 `DB::transaction()`, `beginTransaction()`, `commit()`, `rollBack()` and `afterCommit()` work normally.
 
 ::: warning Nested transactions
-MatrixOne has no savepoints. Nested transactions are flattened into the outermost one: an inner `commit()` only lowers the level, and an inner `rollBack()` does **not** undo the inner writes — only rolling back the outermost transaction does. Avoid relying on partial rollbacks.
+MatrixOne has no `ROLLBACK TO SAVEPOINT`. Nested transactions are flattened into the outermost one: an inner `commit()` only lowers the level, and an inner `rollBack()` does **not** undo the inner writes — only rolling back the outermost transaction does. Avoid relying on partial rollbacks.
 :::
+
+When the outer transaction catches an inner failure, the inner writes are committed with the outer ones:
+
+```php
+DB::transaction(function () {
+    User::create(['name' => 'Outer']);
+
+    try {
+        DB::transaction(function () {
+            User::create(['name' => 'Inner']);
+            throw new RuntimeException();
+        });
+    } catch (RuntimeException) {}
+});
+// MySQL keeps "Outer" only; MatrixOne keeps both.
+```
+
+To fail loudly instead, set `nested_transactions` to `rollback_only` on the connection. An inner rollback then marks the whole transaction, and the outermost commit rolls everything back and throws `MatrixOne\NestedTransactionRolledBackException`:
+
+```php
+'matrixone' => [
+    'driver' => 'matrixone',
+    // ...
+    'nested_transactions' => 'rollback_only',   // default: 'flatten'
+],
+```

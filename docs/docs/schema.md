@@ -32,7 +32,7 @@
 | `vector64($column, $dims)` | `vecf64(dims)` | Blueprint macro added by the driver |
 | `set()` | ✗ | throws |
 | `geometry()`, `geography()` | ✗ | throws |
-| `virtualAs()`, `storedAs()` | ✗ | generated columns throw |
+| `virtualAs()`, `storedAs()`, `virtualAsJson()`, `storedAsJson()` | same as MySQL | generated columns (stored and virtual) can be indexed |
 
 `id()->from(1000)` sets the auto-increment start value when creating a table; MatrixOne cannot change it on an existing table.
 

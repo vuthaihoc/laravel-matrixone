@@ -74,7 +74,7 @@ Article::search('songs')->hybrid()->get();                                  // r
 
 ## Laravel Pulse
 
-Pulse's database storage only supports the `mysql`, `mariadb`, `pgsql` and `sqlite` drivers, and its MySQL schema uses a generated column that MatrixOne does not support. The package provides a MatrixOne storage (bound automatically when Pulse is installed) and a MatrixOne version of Pulse's migration.
+Pulse's database storage only supports the `mysql`, `mariadb`, `pgsql` and `sqlite` drivers, and its MySQL schema declares its generated `key_hash` column as `char(16) character set binary`, which MatrixOne's parser rejects. The package provides a MatrixOne storage (bound automatically when Pulse is installed) and a MatrixOne version of Pulse's migration.
 
 1. Install Pulse without its migration:
 

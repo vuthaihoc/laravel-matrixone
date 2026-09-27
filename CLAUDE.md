@@ -25,6 +25,7 @@ Local runs may use a gitignored `phpunit.xml` (copied from `phpunit.xml.dist`) t
 - `src/MatrixOneConnection.php` — extends `MySqlConnection`: grammars, processor, unique-violation detection, `getMatrixOneVersion()`, and dropping connections broken by a server panic (`handleQueryException`).
 - `src/Connectors/MatrixOneConnector.php` — extends `MySqlConnector`; emulated prepares on by default (`emulate_prepares` option); applies the `variables` option with `SET SESSION`.
 - Snapshots and PITR: `MatrixOneConnection::createSnapshot()`, `createPitr()`, … and the `matrixone:snapshot` / `matrixone:pitr` commands (`src/Console/`).
+- Storage: `flushTable()`, `flushTables()`, `checkpoint()` (`mo_ctl`, admin user) and the `matrixone:flush` command.
 - Monitoring: `MatrixOneConnection::statementLog()` (`src/Monitoring/StatementLogQuery.php`, a builder on `system.statement_info` with replaceable default filters), `getStatementPlan()` (`ExecutionPlan`), `tableStats()` and the `matrixone:slow-queries` command.
 - Session variables at runtime: `MatrixOneConnection::setSessionVariables()`, `getSessionVariables()`, `withSessionVariables()`.
 - `src/Query/Grammar.php` — MySQL grammar overrides (exists, upsert, locks, RAND, savepoints off, JSON, DELETE safeguard, vector distance).
@@ -40,7 +41,7 @@ Local runs may use a gitignored `phpunit.xml` (copied from `phpunit.xml.dist`) t
 ## MatrixOne pitfalls
 
 - Boolean expressions return the strings `"true"`/`"false"`; `(bool) "false"` is true in PHP. Any grammar query whose result is cast to bool must return an integer (`if(expr, 1, 0)`).
-- No savepoints; nested transactions are flattened.
+- No `ROLLBACK TO SAVEPOINT`; nested transactions are flattened (`nested_transactions` => `rollback_only` makes the outermost commit throw instead).
 - An unconditional `DELETE` with `foreign_key_checks = 0` corrupts FK metadata — keep the `where 1 = 1` safeguard.
 - 4.2.4: inserting into a table with both a foreign key and a FULLTEXT index panics.
 - 4.2.4: a correlated `count(*)` with an extra predicate, selected by a single primary key (`loadCount()` on one soft-deletable model), panics and leaves the connection mid-response. Tests that trigger it must not share a connection with later tests.

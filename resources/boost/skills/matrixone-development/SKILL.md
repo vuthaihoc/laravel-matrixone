@@ -78,7 +78,7 @@ Enforce the relationship in application code (validation, `exists` rule, observe
 - `like` / `whereLike()` are case-insensitive (ILIKE); `whereLike(..., caseSensitive: true)` or the `like binary` operator for exact case.
 - All Laravel JSON methods work: `where('meta->a', ...)`, `whereJsonContains()`, `whereJsonOverlaps()`, `whereJsonLength()`, `whereJsonContainsKey()`, `update(['meta->a' => ...])`. `pluck('meta->a')` needs an alias: `pluck('meta->a as a')`.
 - `upsert()`, `insertOrIgnore()`, `updateOrCreate()`, `createOrFirst()` work.
-- `sharedLock()` becomes `FOR UPDATE`; `inRandomOrder($seed)` ignores the seed; `joinLateral()` throws.
+- `sharedLock()` is a real shared lock (`lock in share mode`); `inRandomOrder($seed)` ignores the seed; `joinLateral()` throws.
 
 Full-text:
 
@@ -153,6 +153,17 @@ $db->tableStats('orders');                        // rows, size (refreshed ~1 mi
 - For a query you can re-run, `DB::select('explain analyze '.$query->toRawSql())`.
 - Do not use `mo_table_rows()` for exact counts right after writes.
 
+## Flushing to object storage (S3)
+
+Recent small writes live in the WAL and memory until MatrixOne writes them to object storage. To push important tables sooner (backups, S3 durability), flush them on a schedule through an administrative connection (`mo_ctl` needs root or the sys account's admin):
+
+```php
+DB::connection('matrixone_admin')->flushTable('orders');     // flushTables([...]), checkpoint()
+Schedule::command('matrixone:flush orders payments --database=matrixone_admin')->everyFiveMinutes()->withoutOverlapping();
+```
+
+`--checkpoint` writes every table of every database (seconds); per-table flushes take about half a second.
+
 ## Session variables
 
 ```php
@@ -226,7 +237,7 @@ Article::search('songs')->hybrid(textWeight: 1, semanticWeight: 2)->get();
 
 ## Transactions and tests
 
-- Transactions work; savepoints do not. Nested `DB::transaction()` calls are flattened: an inner rollback does not undo the inner writes, only the outermost rollback does. Do not design code that relies on partial rollbacks.
+- Transactions work; `ROLLBACK TO SAVEPOINT` does not. Nested `DB::transaction()` calls are flattened: an inner rollback does not undo the inner writes, only the outermost rollback does. Do not design code that relies on partial rollbacks. `'nested_transactions' => 'rollback_only'` makes the outer commit throw `MatrixOne\NestedTransactionRolledBackException` instead of committing the inner writes.
 - Laravel's `RefreshDatabase`, `DatabaseTransactions`, `DatabaseTruncation` and `DatabaseMigrations` work unchanged. Because of flattening, a failing inner transaction inside a `RefreshDatabase` test keeps its writes until the test ends.
 - Truncation of tables referenced by foreign keys falls back to `DELETE` automatically.
 

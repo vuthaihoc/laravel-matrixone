@@ -14,7 +14,7 @@
 
 | Feature | Behaviour on MatrixOne |
 |---------|------------------------|
-| `sharedLock()` | Compiled to `for update` — MatrixOne has no shared row locks. |
+| `sharedLock()` | `lock in share mode`: shared readers do not block each other, writers wait (MatrixOne 4.2.4+). |
 | `inRandomOrder($seed)` | The seed is ignored; MatrixOne's `RAND()` takes no argument. |
 | `upsert()` | Uses `on duplicate key update col = values(col)` (the MySQL 8 row alias is not supported). |
 | `delete()` without conditions | Compiled with `where 1 = 1` to avoid a MatrixOne bug that corrupts foreign key metadata. |

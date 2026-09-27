@@ -24,7 +24,8 @@ The **guideline** is short. It holds only the rules an agent must never break:
 - `=` comparisons and unique indexes are case-sensitive, so normalize with the `Lowercase` cast;
 - JSON columns take no defaults or indexes;
 - nested transactions do not roll back on their own (no savepoints);
-- unsupported features: generated columns, expression indexes, lateral joins, query expansion…;
+- a FULLTEXT index needs a primary key;
+- unsupported features: expression indexes, lateral joins, query expansion…;
 - never select a correlated subquery with `limit`, since MatrixOne silently returns NULL;
 - use the driver's full-text and vector helpers instead of raw SQL.
 

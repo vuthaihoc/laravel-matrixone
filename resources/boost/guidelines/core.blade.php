@@ -4,8 +4,9 @@
 - Never put a FULLTEXT index on a table that has its own foreign key: inserts crash MatrixOne 4.2.4. Keep searchable text in a table without foreign keys, or drop the constraint.
 - String `=` comparisons and unique indexes are case-sensitive even on `_ci` collations. Store e-mails and usernames with the `MatrixOne\Eloquent\Casts\Lowercase` cast and lower-case user input before querying or calling `Auth::attempt()`; use `whereIgnoreCase()` only when the data cannot be normalized.
 - JSON columns cannot have default values or indexes. Set JSON defaults in the model (`$attributes`) and index a separate scalar column instead.
-- There are no savepoints: a nested `DB::transaction()` does not roll back on its own; only the outermost transaction really rolls back.
-- Not available: generated columns (`virtualAs`/`storedAs`), expression indexes, `set`/spatial columns, lateral joins, full-text query expansion, indexes on TEXT columns without a prefix length.
+- There is no ROLLBACK TO SAVEPOINT: a nested `DB::transaction()` does not roll back on its own; only the outermost transaction really rolls back. Do not catch an inner transaction's exception and keep going; with `'nested_transactions' => 'rollback_only'` the outer commit then throws.
+- A FULLTEXT index needs a primary key on the table.
+- Not available: expression indexes, `set`/spatial columns, lateral joins, full-text query expansion, indexes on TEXT columns without a prefix length.
 - Use `whereFullText()`, `searchFullText()` and the vector helpers (`vector()` columns, `nearestTo()`, `whereVectorSimilarTo()`) instead of raw `MATCH ... AGAINST` or distance SQL.
 - Never select a correlated subquery with `limit` (e.g. `addSelect([... ->latest()->limit(1)])`): MatrixOne silently returns NULL for most rows. Use `latestOfMany()` / `ofMany()` relationships or aggregate subqueries.
 - For analytics use the driver's `timeWindow()`, `sample()`, `asOfSnapshot()` / `asOfTimestamp()` and `clusterBy()` rather than raw MatrixOne syntax; `clusterBy()` requires a table without a primary key.

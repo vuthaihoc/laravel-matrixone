@@ -111,6 +111,7 @@ See [AI Assistants](docs/docs/boost.md) for installation, updates, customization
 | [Query Builder](docs/docs/query-builder.md) | Behaviour differences, JSON, full-text and vector queries |
 | [Eloquent](docs/docs/eloquent.md) | Models, the `AsVector` cast, transactions |
 | [Full-text Search](docs/docs/full-text.md) | Parsers, relevance, session variables, FULLTEXT2 |
+| [Storage and Flushing](docs/docs/storage.md) | Flushing tables to object storage (S3) on a schedule, checkpoints |
 | [Monitoring](docs/docs/monitoring.md) | Statement history, slow queries, execution plans, table statistics |
 | [Analytics](docs/docs/analytics.md) | Window functions, time windows, sampling, snapshots, time travel, CLUSTER BY |
 | [Integrations](docs/docs/integrations.md) | Laravel Scout (in-table and separate index), Pulse and Telescope |
