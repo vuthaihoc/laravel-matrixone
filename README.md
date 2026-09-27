@@ -119,6 +119,7 @@ See [AI Assistants](docs/docs/boost.md) for installation, updates, customization
 | [Testing](docs/docs/testing.md) | Laravel testing traits on MatrixOne |
 | [AI Assistants](docs/docs/boost.md) | Laravel Boost guideline and `matrixone-development` skill |
 | [Compatibility](docs/docs/compatibility.md) | Every MatrixOne difference the driver handles or rejects |
+| [Companion Packages](docs/docs/companion-packages.md) | laravel-db-portable and the CockroachDB driver |
 
 ## Testing
 

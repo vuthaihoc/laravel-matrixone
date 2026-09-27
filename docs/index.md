@@ -16,25 +16,31 @@ hero:
 features:
   - title: Drop-in driver
     details: A `matrixone` driver built on Laravel's MySQL stack. Read/write splitting, reconnects and lazy connections work like any built-in driver.
+    link: /docs/installation
   - title: Eloquent & Query Builder
     details: Relationships, eager loading, soft deletes, upserts, JSON columns, full-text search and pagination on MatrixOne.
+    link: /docs/query-builder
   - title: Schema & Migrations
     details: Standard `artisan migrate`, `migrate:fresh` and `db:wipe`, with schema introspection adapted to MatrixOne's catalog.
+    link: /docs/schema
   - title: Real transactions
     details: MatrixOne is ACID, so Laravel's own RefreshDatabase and DatabaseTransactions testing traits work unchanged.
+    link: /docs/testing
   - title: Full-text search
     details: FULLTEXT indexes with relevance ranking in the query builder, and two Laravel Scout drivers — search inside your MatrixOne tables, or use MatrixOne as a separate search index.
     link: /docs/full-text
   - title: Vector search
     details: vecf32 / vecf64 columns, IVF-Flat and HNSW indexes, an AsVector cast and nearest-neighbour queries.
+    link: /docs/schema#vector-columns-and-indexes
   - title: Pulse & Telescope
     details: Store Laravel Pulse metrics and Telescope entries in MatrixOne. Pulse gets a MatrixOne storage and migration; Telescope works with its own migration.
-    link: '#laravel-pulse-and-telescope'
+    link: /docs/integrations#laravel-pulse
   - title: Companion packages
     details: Works with laravel-db-portable (portable JSON, NULLS LAST and index macros, scan / audit / copy for switching databases) and the CockroachDB driver vuthaihoc/cockroachdb-laravel.
-    link: '#companion-packages'
+    link: /docs/companion-packages
   - title: MatrixOne-aware
     details: Works around MatrixOne quirks (boolean results, savepoints, TRUNCATE with foreign keys) and fails clearly on unsupported features.
+    link: /docs/compatibility
 ---
 
 ## Full-text search, two ways

@@ -44,6 +44,7 @@ export default defineConfig({
         text: 'Reference',
         items: [
           { text: 'MatrixOne Compatibility', link: '/docs/compatibility' },
+          { text: 'Companion Packages', link: '/docs/companion-packages' },
         ],
       },
     ],
