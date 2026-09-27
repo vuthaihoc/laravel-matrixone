@@ -343,9 +343,8 @@ class Grammar extends MySqlGrammar
     /**
      * {@inheritDoc}
      *
-     * - A shared lock is promoted to `for update` (`lock in share mode` is not
-     *   supported, and `for share` only since 4.2.4), which is stricter but
-     *   never less safe.
+     * - Shared locks (`lock in share mode`) are real shared locks since 4.2.4:
+     *   shared readers do not wait for each other, writers wait for them.
      * - MatrixOne has no `skip locked` / `nowait`. Laravel's database queue
      *   pops jobs with `FOR UPDATE SKIP LOCKED` on MySQL 8 servers, so those
      *   modifiers are dropped: concurrent workers wait for each other instead
@@ -354,7 +353,7 @@ class Grammar extends MySqlGrammar
     protected function compileLock(Builder $query, $value)
     {
         if (! is_string($value)) {
-            return 'for update';
+            return $value ? 'for update' : 'lock in share mode';
         }
 
         $lock = trim((string) preg_replace('/\s+(skip\s+locked|nowait)\s*$/i', '', $value));

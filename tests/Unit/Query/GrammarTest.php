@@ -71,9 +71,9 @@ class GrammarTest extends TestCase
         $this->assertSame('select * from `users` where 0 = 1', $this->query()->from('users')->whereInIgnoreCase('role', [])->toSql());
     }
 
-    public function testSharedLockIsPromotedToForUpdate(): void
+    public function testSharedAndExclusiveLocks(): void
     {
-        $this->assertSame('select * from `users` for update', $this->query()->from('users')->sharedLock()->toSql());
+        $this->assertSame('select * from `users` lock in share mode', $this->query()->from('users')->sharedLock()->toSql());
         $this->assertSame('select * from `users` for update', $this->query()->from('users')->lockForUpdate()->toSql());
     }
 
