@@ -39,7 +39,8 @@
     },
     "suggest": {
         "laravel/scout": "Full-text, semantic and hybrid search with SCOUT_DRIVER=matrixone or matrixone-index",
-        "ext-intl": "Accent folding for full-text search (TextNormalizer, matrixone-index fold_accents)"
+        "ext-intl": "Accent folding for full-text search (TextNormalizer, matrixone-index fold_accents)",
+        "vuthaihoc/laravel-db-portable": "Portable JSON, NULLS LAST and index macros, and scan/audit/copy commands for moving an application to MatrixOne"
     },
     "autoload": {
         "psr-4": {

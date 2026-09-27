@@ -8,7 +8,7 @@ Packages from the same author, tested together with this driver:
 | [vuthaihoc/cockroachdb-laravel](https://github.com/vuthaihoc/crdb2025) | Run the other side of a move from CockroachDB. Its `strict_integers` option keeps integer columns within MySQL ranges, so the data fits MatrixOne's schema. |
 
 ```bash
-composer require vuthaihoc/laravel-matrixone:^1.0@beta
+composer require vuthaihoc/laravel-matrixone
 composer require vuthaihoc/laravel-db-portable:^0.3          # optional
 ```
 
