@@ -162,7 +162,7 @@ DB::connection('matrixone_admin')->flushTable('orders');     // flushTables([...
 Schedule::command('matrixone:flush orders payments --database=matrixone_admin')->everyFiveMinutes()->withoutOverlapping();
 ```
 
-`--checkpoint` writes every table of every database (seconds); per-table flushes take about half a second.
+`--checkpoint` writes every table of every account (seconds); per-table flushes take about half a second. Only the sys account's admin (root) may run them, and per-table flushes only reach tables of the sys account: when each project is its own account (tenant), run a central checkpoint schedule with root instead of giving root to the application.
 
 ## Session variables
 

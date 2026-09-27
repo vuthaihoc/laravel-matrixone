@@ -554,8 +554,9 @@ class MatrixOneConnection extends MySqlConnection
     /**
      * Write a table's committed rows from memory to object storage (S3 in a
      * S3-backed deployment). Until then recent writes live in the WAL and in
-     * memory; they are durable but not yet in the object store. Needs an
-     * administrative user (root / the sys account's admin).
+     * memory; they are durable but not yet in the object store. Needs the
+     * sys account's admin (root), and only reaches tables of the sys account:
+     * tables of other accounts (tenants) are written by checkpoint().
      */
     public function flushTable(string $table): void
     {
@@ -590,9 +591,9 @@ class MatrixOneConnection extends MySqlConnection
     }
 
     /**
-     * Run a checkpoint: every table of every database is written to object
-     * storage and the WAL is truncated. `$global` runs a global checkpoint.
-     * Needs an administrative user.
+     * Run a checkpoint: every table of every database of every account
+     * (tenant) is written to object storage and the WAL can be truncated.
+     * `$global` runs a global checkpoint. Needs the sys account's admin.
      */
     public function checkpoint(bool $global = false): void
     {
@@ -608,10 +609,14 @@ class MatrixOneConnection extends MySqlConnection
             $result = $this->scalar("select mo_ctl('dn', ?, ?)", [$command, $argument]);
         } catch (Exception $e) {
             if (str_contains($e->getMessage(), 'do not have privilege')) {
-                throw new RuntimeException("mo_ctl('dn', '{$command}') needs an administrative MatrixOne user (root or the sys account's admin): run it on a separate admin connection.", 0, $e);
+                throw new RuntimeException("mo_ctl('dn', '{$command}') needs the sys account's admin (root); account (tenant) admins are refused. Run it on a separate admin connection.", 0, $e);
             }
 
             throw $e;
+        }
+
+        if ($command === 'flush' && ($result === null || $result === '')) {
+            throw new RuntimeException("mo_ctl('dn', 'flush', '{$argument}') did nothing: MatrixOne only flushes tables of the sys account by name. Tables of other accounts (tenants) are written by a checkpoint run by the sys account's admin.");
         }
 
         $decoded = is_string($result) ? json_decode($result, true) : null;

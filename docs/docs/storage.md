@@ -24,11 +24,27 @@ $admin->checkpoint(global: true);                // a global checkpoint
 
 | Method | MatrixOne command | Scope | Time (local 4.2.4) |
 |--------|-------------------|-------|--------------------|
-| `flushTable($table)` | `mo_ctl('dn', 'flush', 'db.table')` | one table | about 0.5 s |
-| `checkpoint()` | `mo_ctl('dn', 'checkpoint', '')` | every table | about 1.5 to 4 s |
+| `flushTable($table)` | `mo_ctl('dn', 'flush', 'db.table')` | one table of the `sys` account | about 0.5 s |
+| `checkpoint()` | `mo_ctl('dn', 'checkpoint', '')` | every table of every account | about 1.5 to 4 s |
 | `checkpoint(global: true)` | `mo_ctl('dn', 'globalcheckpoint', '')` | every table | about 2 s |
 
-`mo_ctl` needs an administrative user (root, or the admin of the `sys` account). Other users get `do not have privilege to execute the statement`, even with every privilege on the database. Use a separate connection for these calls:
+## Permissions and accounts (tenants)
+
+`mo_ctl` needs the admin of the `sys` account (`root`). Measured on MatrixOne 4.2.4:
+
+| Who runs it | Flush a table | Checkpoint |
+|-------------|---------------|------------|
+| A user with every privilege on the database | refused (`do not have privilege`) | refused |
+| The admin of another account (tenant), e.g. `acme:admin` | refused, even for its own tables | refused |
+| `root` (sys account) | only tables of the `sys` account | every table of **every account** |
+
+So when each project has its own account, a project cannot flush its own tables, and `root` cannot flush a single tenant table either. The flush command then fails with `did nothing: MatrixOne only flushes tables of the sys account`. What works is a **checkpoint run centrally with root**. It covers every tenant in a few seconds.
+
+- Do not give `root` to each application. Keep it on one operations host or one admin application that runs the checkpoint schedule (a system cron job calling the MatrixOne client works too).
+- Applications keep least-privilege users on their own databases.
+- Per-table flushes (`flushTable()`, `matrixone:flush orders`) are for tables in the `sys` account, with `root`.
+
+A separate connection for the admin calls:
 
 ```php
 // config/database.php
@@ -44,6 +60,23 @@ $admin->checkpoint(global: true);                // a global checkpoint
 
 ## Flush on a schedule
 
+On one operations host (with `root`), whatever the number of tenants:
+
+```php
+// routes/console.php of the admin application
+Schedule::command('matrixone:flush --checkpoint --database=matrixone_admin')
+    ->everyTenMinutes()
+    ->withoutOverlapping();
+```
+
+Or, without Laravel:
+
+```bash
+*/10 * * * * mysql -h 127.0.0.1 -P 6001 -u root -p"$MO_ROOT_PASSWORD" -e "select mo_ctl('dn', 'checkpoint', '')"
+```
+
+For tables in the `sys` account, per-table flushes:
+
 ```bash
 php artisan matrixone:flush orders payments --database=matrixone_admin
 php artisan matrixone:flush --all --database=matrixone_admin           # every table of the database
@@ -51,7 +84,7 @@ php artisan matrixone:flush --checkpoint --database=matrixone_admin    # every t
 php artisan matrixone:flush --checkpoint --global --database=matrixone_admin
 ```
 
-Flush important tables more often than MatrixOne's own background jobs do:
+Flush important tables more often than MatrixOne's own background jobs do (sys account only):
 
 ```php
 // routes/console.php
