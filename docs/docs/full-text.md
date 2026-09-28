@@ -31,7 +31,7 @@ Schema::create('articles', function (Blueprint $table) {
 | Parser | Use it for |
 |--------|-----------|
 | default | Space-separated languages (English, Vietnamese...) |
-| `ngram` | Languages without spaces (Chinese, Japanese) and partial words. Tokens are `ngram_token_size` characters long (3 by default, a global server variable). |
+| `ngram` | Languages without spaces (Chinese, Japanese): CJK text is split into `ngram_token_size`-character tokens (3 by default, a global server variable). Latin and Vietnamese text is still split into **words**, so `ngram` does not find parts of words or tolerate typos there (see [Suggestions](#suggestions-and-fuzzy-search)). |
 | `json` | JSON columns: every string value inside the document becomes searchable. |
 
 Drop an index with `$table->dropFullText(['title'])` or by name.
@@ -266,6 +266,26 @@ Workarounds:
 - **Prefixes instead of stems:** `FullTextQuery::anyOf($term, prefix: true)` (`learn*`), or `->prefix('learn')`.
 - **Accents:** store and search a folded copy with `MatrixOne\Support\TextNormalizer::foldAccents()` (needs `ext-intl`); `Tiếng Việt Đà Nẵng` becomes `Tieng Viet Da Nang`. The `matrixone-index` Scout engine does this with `'fold_accents' => true`.
 - **Stopwords:** remove them from the search term in PHP if they hurt ranking; BM25 (`ft_relevancy_algorithm`) already gives frequent words little weight.
+
+## Suggestions and fuzzy search
+
+For search boxes and autocomplete:
+
+```php
+Word::whereStartsWith('word', $search)->get();   // word ilike 'search%', can use an index on the column
+Word::whereContains('word', $search)->get();     // word ilike '%search%', a full scan
+Word::suggest('word', $search)->limit(10)->get();
+```
+
+`%`, `_` and `\` in the search are matched literally. `suggest()` returns values starting with the search and, from 3 characters, values containing it; values starting with the search first, then the shortest.
+
+MatrixOne has **no fuzzy (typo-tolerant) search**: no trigram similarity (`pg_trgm`), no `levenshtein()` or other edit distance, and the `ngram` parser only splits CJK text into n-grams (Latin text is indexed as whole words, lower-cased). `aple` does not find `apple` by any index. Options:
+
+- **Prefixes:** a FULLTEXT index answers word prefixes quickly, `FullTextQuery::anyOf($term, prefix: true)` (`appl*`).
+- **Accents:** MatrixOne has no `unaccent()`; the `unaccent` argument of `whereStartsWith()`/`whereContains()`/`suggest()` exists for the same signature as the CockroachDB driver and has no effect. Store a folded copy (`TextNormalizer::foldAccents()`) and search it.
+- **Typos:** rank a few hundred prefix/contains candidates in PHP (`levenshtein()`, `similar_text()`), or use vector search on embeddings.
+
+[laravel-db-portable](https://github.com/vuthaihoc/laravel-db-portable)'s `whereSimilar()` falls back to `whereContains()` on MatrixOne, with a warning.
 
 ## Limitations
 

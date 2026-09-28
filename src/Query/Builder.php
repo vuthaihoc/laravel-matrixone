@@ -238,6 +238,68 @@ class Builder extends BaseBuilder
     }
 
     /**
+     * Rows whose column starts with a value, ignoring case; `%`, `_` and `\`
+     * are matched literally. An index on the column serves it.
+     *
+     * `$unaccent` exists for the same signature as the CockroachDB driver:
+     * MatrixOne has no unaccent(), so accents still count.
+     *
+     * @return $this
+     */
+    public function whereStartsWith(string $column, string $value, bool $unaccent = false, string $boolean = 'and'): static
+    {
+        return $this->whereRaw($this->grammar->wrap($column).' ilike ?', [self::escapeLike($value).'%'], $boolean);
+    }
+
+    /**
+     * Rows whose column contains a value, ignoring case (a full scan).
+     *
+     * @return $this
+     */
+    public function whereContains(string $column, string $value, bool $unaccent = false, string $boolean = 'and'): static
+    {
+        return $this->whereRaw($this->grammar->wrap($column).' ilike ?', ['%'.self::escapeLike($value).'%'], $boolean);
+    }
+
+    /**
+     * Suggestions for a search box: values starting with the search, then
+     * (from 3 characters) values containing it; shortest first. MatrixOne
+     * has no trigram similarity, so there is no typo tolerance (the `ngram`
+     * parser only splits CJK text into n-grams, Latin text into words).
+     *
+     * @return $this
+     */
+    public function suggest(string $column, string $value, bool $unaccent = false): static
+    {
+        $value = trim($value);
+
+        if ($value === '') {
+            return $this->whereRaw('0 = 1');
+        }
+
+        $wrapped = $this->grammar->wrap($column);
+
+        if (mb_strlen($value) < 3) {
+            $this->whereStartsWith($column, $value);
+        } else {
+            $this->whereContains($column, $value);
+            // An integer, not a boolean key: MatrixOne ignores a DESC key after a boolean one.
+            $this->addBinding(self::escapeLike($value).'%', $this->unions ? 'unionOrder' : 'order');
+            $this->orderBy(new Expression("if({$wrapped} ilike ?, 0, 1)"));
+        }
+
+        return $this->orderBy(new Expression("char_length({$wrapped})"))->orderBy($column);
+    }
+
+    /**
+     * Escape the LIKE wildcards of a value (the escape character is "\").
+     */
+    public static function escapeLike(string $value): string
+    {
+        return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value);
+    }
+
+    /**
      * Add the full-text relevance score to the select list.
      *
      * The columns must match a FULLTEXT index. MatrixOne scores with TF-IDF by

@@ -40,7 +40,8 @@ The database must exist before migrating (`create database laravel;`).
 |------|----|-------|
 | Full-text search | `$table->fullText([...])` on a table **without its own foreign keys** | FULLTEXT + foreign key on one table: inserts panic on 4.2.4 |
 | Search inside JSON | `$table->fullText('meta')->parser('json')` | Indexing the JSON column directly |
-| CJK / partial words | `->parser('ngram')` | Default parser for Chinese/Japanese |
+| CJK text | `->parser('ngram')` | Default parser for Chinese/Japanese |
+| Search box / autocomplete | `suggest()`, `whereStartsWith()`, `whereContains()` (no fuzzy search on MatrixOne) | `->parser('ngram')` for partial Latin words (it indexes whole words), raw `like` with unescaped `%`/`_` |
 | JSON default | Model `$attributes = ['meta' => '{}']` | `->default('{}')` on JSON (throws) |
 | Query by a JSON field | Copy the field into a regular indexed column | Index on JSON or expression index (rejected) |
 | Unique e-mail / username | `Lowercase` cast + unique index on the normalized value | Relying on `_ci` collation (ignored) |
