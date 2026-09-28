@@ -9,6 +9,7 @@ use Illuminate\Database\Query\Expression;
 use Illuminate\Database\QueryException;
 use Illuminate\Filesystem\Filesystem;
 use InvalidArgumentException;
+use MatrixOne\Concerns\RetriesTransactionConflicts;
 use MatrixOne\Connectors\MatrixOneConnector;
 use MatrixOne\Monitoring\ExecutionPlan;
 use MatrixOne\Monitoring\StatementLogQuery;
@@ -21,6 +22,8 @@ use RuntimeException;
 
 class MatrixOneConnection extends MySqlConnection
 {
+    use RetriesTransactionConflicts;
+
     /** {@inheritDoc} */
     public function getDriverTitle()
     {
@@ -192,7 +195,8 @@ class MatrixOneConnection extends MySqlConnection
      * keeps its session, transaction and row locks until the socket closes;
      * the next write on the same rows then blocks. The broken connection is
      * dropped (the next query reconnects) and the exception is rethrown:
-     * retrying would crash the server again.
+     * retrying would crash the server again. A write conflict or deadlock
+     * outside a transaction is retried (RetriesTransactionConflicts).
      *
      * @param  array<int|string, mixed>  $bindings
      */
@@ -204,7 +208,7 @@ class MatrixOneConnection extends MySqlConnection
             throw $e;
         }
 
-        return parent::handleQueryException($e, $query, $bindings, $callback);
+        return $this->retryConflictingStatement($e, $query, $bindings, $callback);
     }
 
     /**

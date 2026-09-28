@@ -239,6 +239,7 @@ Article::search('songs')->hybrid(textWeight: 1, semanticWeight: 2)->get();
 ## Transactions and tests
 
 - Transactions work; `ROLLBACK TO SAVEPOINT` does not. Nested `DB::transaction()` calls are flattened: an inner rollback does not undo the inner writes, only the outermost rollback does. Do not design code that relies on partial rollbacks. `'nested_transactions' => 'rollback_only'` makes the outer commit throw `MatrixOne\NestedTransactionRolledBackException` instead of committing the inner writes.
+- A write-write conflict (`w-w conflict`), deadlock or lock wait timeout rolls back the whole transaction. `DB::transaction($callback)` retries the callback up to `retry_attempts` times (default 3, with backoff) and statements outside a transaction are retried too; manual `beginTransaction()` / `commit()` are not. Make callbacks safe to run again: no mail, HTTP calls or dispatches inside them except through `afterCommit`.
 - Laravel's `RefreshDatabase`, `DatabaseTransactions`, `DatabaseTruncation` and `DatabaseMigrations` work unchanged. Because of flattening, a failing inner transaction inside a `RefreshDatabase` test keeps its writes until the test ends.
 - Truncation of tables referenced by foreign keys falls back to `DELETE` automatically.
 

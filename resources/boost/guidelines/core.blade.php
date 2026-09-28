@@ -5,6 +5,7 @@
 - String `=` comparisons and unique indexes are case-sensitive even on `_ci` collations. Store e-mails and usernames with the `MatrixOne\Eloquent\Casts\Lowercase` cast and lower-case user input before querying or calling `Auth::attempt()`; use `whereIgnoreCase()` only when the data cannot be normalized.
 - JSON columns cannot have default values or indexes. Set JSON defaults in the model (`$attributes`) and index a separate scalar column instead.
 - There is no ROLLBACK TO SAVEPOINT: a nested `DB::transaction()` does not roll back on its own; only the outermost transaction really rolls back. Do not catch an inner transaction's exception and keep going; with `'nested_transactions' => 'rollback_only'` the outer commit then throws.
+- Write conflicts and deadlocks roll back the whole transaction; the driver retries `DB::transaction()` up to `retry_attempts` times (default 3). Keep side effects that must not repeat (mail, HTTP calls, jobs) out of the callback or behind `afterCommit`.
 - A FULLTEXT index needs a primary key on the table.
 - Not available: expression indexes, `set`/spatial columns, lateral joins, full-text query expansion, indexes on TEXT columns without a prefix length.
 - There is no fuzzy/trigram search; for autocomplete use `suggest()`, `whereStartsWith()` or `whereContains()`.
