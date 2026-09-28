@@ -1,0 +1,86 @@
+name: tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    name: Pint + PHPStan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.4
+          extensions: pdo_mysql, intl
+          coverage: none
+
+      - uses: ramsey/composer-install@v4
+
+      - run: composer cs
+      - run: composer phpstan -- --error-format=github
+
+  tests:
+    name: PHP ${{ matrix.php }} - Laravel ${{ matrix.laravel }} - MatrixOne ${{ matrix.matrixone }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { php: '8.2', laravel: '12.*', testbench: '^10.0', matrixone: 4.2.4 }
+          - { php: '8.3', laravel: '12.*', testbench: '^10.0', matrixone: 4.2.4 }
+          - { php: '8.3', laravel: '13.*', testbench: '^11.0', matrixone: 4.2.5 }
+          - { php: '8.4', laravel: '13.*', testbench: '^11.0', matrixone: 4.2.4 }
+
+    env:
+      MATRIXONE_HOST: 127.0.0.1
+      MATRIXONE_PORT: 6001
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Start MatrixOne
+        run: >
+          docker run -d --name matrixone --hostname matrixone -p 127.0.0.1:6001:6001
+          matrixorigin/matrixone:${{ matrix.matrixone }}
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: pdo_mysql, intl
+          coverage: none
+
+      - name: Require Laravel ${{ matrix.laravel }}
+        run: >
+          composer require --dev --no-update --no-interaction
+          "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}"
+
+      # composer update, so the lock file does not override the Laravel version above.
+      - uses: ramsey/composer-install@v4
+        with:
+          dependency-versions: highest
+
+      - name: Wait for MatrixOne
+        run: |
+          for i in $(seq 1 90); do
+            mysql -h 127.0.0.1 -P 6001 -u root -p111 -e 'select 1' >/dev/null 2>&1 && exit 0
+            sleep 2
+          done
+          docker logs --tail 100 matrixone
+          exit 1
+
+      # Unit + Feature (phpunit.xml.dist defaultTestSuite); Monitoring and KnownIssues stay manual.
+      - run: vendor/bin/phpunit --colors=always
+
+      - name: MatrixOne logs
+        if: failure()
+        run: docker logs --tail 200 matrixone
