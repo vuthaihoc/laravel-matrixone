@@ -3,6 +3,9 @@
 namespace MatrixOne\Query;
 
 use DateTimeInterface;
+use DbPortable\Contracts\HistoricalReads;
+use DbPortable\Contracts\SearchBox;
+use DbPortable\Query\HistoricalReadMacros;
 use Illuminate\Contracts\Database\Query\Expression as ExpressionContract;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Database\Eloquent\Model;
@@ -18,7 +21,7 @@ use MatrixOne\Support\Vector;
 /**
  * @property Grammar $grammar
  */
-class Builder extends BaseBuilder
+class Builder extends BaseBuilder implements HistoricalReads, SearchBox
 {
     /**
      * The time window aggregation: interval(...) sliding(...) fill(...).
@@ -307,7 +310,7 @@ class Builder extends BaseBuilder
      * to switch.
      *
      * @param  string|string[]  $columns
-     * @param  array{mode?: 'natural'|'boolean'}  $options
+     * @param  array<string, mixed>  $options  mode: 'natural' (default) or 'boolean'
      * @return $this
      */
     public function selectFullTextRelevance(string|array $columns, string $value, string $as = 'relevance', array $options = []): static
@@ -323,7 +326,7 @@ class Builder extends BaseBuilder
      * Order the query by full-text relevance (most relevant first).
      *
      * @param  string|string[]  $columns
-     * @param  array{mode?: 'natural'|'boolean'}  $options
+     * @param  array<string, mixed>  $options  mode: 'natural' (default) or 'boolean'
      * @return $this
      */
     public function orderByFullTextRelevance(string|array $columns, string $value, array $options = [], string $direction = 'desc'): static
@@ -350,7 +353,7 @@ class Builder extends BaseBuilder
      * A FullTextQuery runs in boolean mode.
      *
      * @param  string|string[]  $columns
-     * @param  array{mode?: 'natural'|'boolean'}  $options
+     * @param  array<string, mixed>  $options  mode: 'natural' (default) or 'boolean'
      * @return $this
      */
     public function searchFullText(string|array $columns, string|FullTextQuery $value, array $options = []): static
@@ -567,6 +570,53 @@ class Builder extends BaseBuilder
         $this->timeTravel = '{as of timestamp '.$this->grammar->quoteLiteral($time).'}';
 
         return $this;
+    }
+
+    /**
+     * Read the data as it was when the query stops reading a snapshot or timestamp.
+     *
+     * @return $this
+     */
+    public function withoutTimeTravel(): static
+    {
+        $this->timeTravel = null;
+
+        return $this;
+    }
+
+    /**
+     * laravel-db-portable's stale read: MatrixOne reads do not contend with writes (MVCC),
+     * so the query reads current data.
+     *
+     * @return $this
+     */
+    public function readStale(): static
+    {
+        return $this;
+    }
+
+    /**
+     * laravel-db-portable's historical read: asOfTimestamp() with a DateTimeInterface, a
+     * timestamp or a relative duration such as "-10s", in the connection's time zone.
+     *
+     * @return $this
+     */
+    public function asOfTime(DateTimeInterface|string $time): static
+    {
+        /** @var MatrixOneConnection $connection */
+        $connection = $this->connection;
+
+        return $this->asOfTimestamp(HistoricalReadMacros::moment($time, $connection));
+    }
+
+    /**
+     * laravel-db-portable's name for withoutTimeTravel().
+     *
+     * @return $this
+     */
+    public function readCurrent(): static
+    {
+        return $this->withoutTimeTravel();
     }
 
     /**

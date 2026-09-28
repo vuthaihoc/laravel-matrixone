@@ -25,7 +25,8 @@
         "ext-pdo_mysql": "*",
         "illuminate/console": "^12.0 || ^13.0",
         "illuminate/database": "^12.0 || ^13.0",
-        "illuminate/support": "^12.0 || ^13.0"
+        "illuminate/support": "^12.0 || ^13.0",
+        "vuthaihoc/laravel-db-portable": "^0.7"
     },
     "require-dev": {
         "laravel/pint": "^1.17",
@@ -39,8 +40,7 @@
     },
     "suggest": {
         "laravel/scout": "Full-text, semantic and hybrid search with SCOUT_DRIVER=matrixone or matrixone-index",
-        "ext-intl": "Accent folding for full-text search (TextNormalizer, matrixone-index fold_accents)",
-        "vuthaihoc/laravel-db-portable": "Portable JSON, NULLS LAST and index macros, and scan/audit/copy commands for moving an application to MatrixOne"
+        "ext-intl": "Accent folding for full-text search (TextNormalizer, matrixone-index fold_accents)"
     },
     "autoload": {
         "psr-4": {

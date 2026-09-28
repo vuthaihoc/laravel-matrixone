@@ -128,6 +128,8 @@ DB::table('orders')->asOfSnapshot('orders_eod')
 
 - Time travel applies to the query's `from` table. For a join, time-travel the subquery: `->joinSub(DB::table('orders')->asOfSnapshot('eod'), 'old', ...)`.
 - `asOfTimestamp()` interprets the time in the connection's session time zone.
+- `withoutTimeTravel()` reads current data again.
+- The builder implements `DbPortable\Contracts\HistoricalReads` of laravel-db-portable: `asOfTime()` takes a DateTimeInterface, a timestamp or a duration such as `'-10s'` and converts it to the session time zone, `readCurrent()` is `withoutTimeTravel()`, and `readStale()` reads current data (MatrixOne reads do not contend with writes).
 - Snapshot and PITR names accept letters, digits, `_` and `-`. Snapshots are account-wide, so choose unique names.
 
 From the command line:
