@@ -17,9 +17,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      # PHP 8.3 keeps symfony/console on 7.x: PHPStan 1.12 misses the typed
+      # Command::SUCCESS/FAILURE constants of console 8 (PHP 8.4+).
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: 8.4
+          php-version: 8.3
           extensions: pdo_mysql, intl
           coverage: none
 
