@@ -222,8 +222,6 @@ class Grammar extends MySqlGrammar
      * than 64 characters are shortened, and JSON columns cannot be indexed.
      *
      * @return string|null
-     *
-     * @phpstan-ignore method.childReturnType
      */
     protected function compileKey(Blueprint $blueprint, Fluent $command, $type)
     {

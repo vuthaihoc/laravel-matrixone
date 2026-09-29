@@ -37,7 +37,7 @@ class PitrCommand extends Command
                 ['Name', 'Level', 'Database', 'Table', 'Range', 'Modified'],
                 array_map(fn ($row) => [
                     $row['pitr_name'], $row['pitr_level'], $row['database_name'], $row['table_name'],
-                    $row['pitr_length'].$row['pitr_unit'], $row['modified_time'],
+                    implode('', array_filter([$row['pitr_length'], $row['pitr_unit']], 'is_scalar')), $row['modified_time'],
                 ], $connection->getPitrs()),
             );
 

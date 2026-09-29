@@ -2,7 +2,7 @@ parameters:
   level: 9
   paths:
     - src
-  reportUnmatchedIgnoredErrors: false
+  reportUnmatchedIgnoredErrors: true
   ignoreErrors:
     # Dynamic SQL vs Laravel 13's literal-string typing on Expression / whereRaw.
     - '#Illuminate\\Database\\Query\\Expression constructor expects TValue#'
@@ -12,4 +12,11 @@ parameters:
     - '#Access to an undefined property Illuminate\\Database\\Schema\\ColumnDefinition::\$\w+\.#'
     # Laravel's grammar method signatures use the untyped Fluent generic.
     - '#with generic class Illuminate\\Support\\Fluent but does not specify its types#'
+    # Blueprint::vectorIndex()/dropVectorIndex() exist on Laravel 13 but not 12:
+    # the method_exists() checks are always true only against Laravel 13.
+    -
+      message: '#^Call to function method_exists\(\) with ''Illuminate\\\\Database\\\\Schema\\\\Blueprint'' and ''(dropVectorIndex|vectorIndex)'' will always evaluate to true\.$#'
+      identifier: function.alreadyNarrowedType
+      path: src/MatrixOneServiceProvider.php
+      reportUnmatched: false
   treatPhpDocTypesAsCertain: false

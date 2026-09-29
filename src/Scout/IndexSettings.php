@@ -3,6 +3,7 @@
 namespace MatrixOne\Scout;
 
 use InvalidArgumentException;
+use Stringable;
 
 /**
  * Settings of one matrixone-index Scout index, from
@@ -67,7 +68,12 @@ final class IndexSettings
         $fulltext = $settings['fulltext'] ?? null;
 
         return new self(
-            is_array($fulltext) ? array_values(array_map('strval', $fulltext)) : null,
+            is_array($fulltext) ? array_values(array_map(
+                static fn (mixed $column): string => is_scalar($column) || $column === null || $column instanceof Stringable
+                    ? (string) $column
+                    : throw new InvalidArgumentException('The MatrixOne index fulltext setting must list column names.'),
+                $fulltext,
+            )) : null,
             // Soft delete metadata is always filterable.
             $filterable + $sortable + ['__soft_deleted' => 'integer'],
             array_keys($sortable),

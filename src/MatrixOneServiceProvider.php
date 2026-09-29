@@ -91,7 +91,6 @@ class MatrixOneServiceProvider extends ServiceProvider
         // CLUSTER BY: sort the table's data by these columns (analytics).
         Blueprint::macro('clusterBy', function (array|string $columns) {
             /** @var Blueprint $this */
-            // @phpstan-ignore method.protected (macros are bound to the Blueprint)
             return $this->addCommand('clusterBy', ['columns' => (array) $columns]);
         });
 
@@ -103,19 +102,20 @@ class MatrixOneServiceProvider extends ServiceProvider
                 $columns = (array) $column;
                 $name ??= strtolower(str_replace(['-', '.'], '_', $this->getTable().'_'.implode('_', $columns).'_vectorindex'));
 
-                // @phpstan-ignore method.protected (macros are bound to the Blueprint)
                 return $this->addCommand('vectorIndex', ['index' => $name, 'columns' => $columns, 'algorithm' => null, 'operatorClass' => 'vector_cosine_ops']);
             });
         }
 
         if (! method_exists(Blueprint::class, 'dropVectorIndex')) {
             Blueprint::macro('dropVectorIndex', function ($index) {
-                /** @var Blueprint $this */
+                /**
+                 * @var Blueprint $this
+                 * @var string|array<int, string> $index as in Laravel 13's Blueprint::dropVectorIndex()
+                 */
                 $name = is_array($index)
                     ? strtolower(str_replace(['-', '.'], '_', $this->getTable().'_'.implode('_', $index).'_vectorindex'))
                     : $index;
 
-                // @phpstan-ignore method.protected (macros are bound to the Blueprint)
                 return $this->addCommand('dropVectorIndex', ['index' => $name]);
             });
         }

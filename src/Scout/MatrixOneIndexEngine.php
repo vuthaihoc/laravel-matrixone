@@ -419,7 +419,7 @@ class MatrixOneIndexEngine extends Engine implements SupportsSemanticSearch
     /**
      * Weighted reciprocal rank fusion of ranked key lists (as in Scout).
      *
-     * @param  list<array{0: list<string>, 1: float}>  $rankings
+     * @param  list<array{0: array<int, string>, 1: float}>  $rankings
      * @return list<string>
      */
     protected function fuse(array $rankings): array
@@ -550,7 +550,12 @@ class MatrixOneIndexEngine extends Engine implements SupportsSemanticSearch
 
         foreach ($inputs as $key => $input) {
             if (is_array($input)) {
-                $vectors[$key] = array_map('floatval', array_values($input));
+                $vectors[$key] = array_map(
+                    static fn (mixed $value): float => is_scalar($value) || $value === null
+                        ? (float) $value
+                        : throw new ScoutException('A searchable embedding must be an array of numbers.'),
+                    array_values($input),
+                );
             } elseif (is_string($input) && trim($input) !== '') {
                 $texts[$key] = $input;
             }
@@ -581,7 +586,7 @@ class MatrixOneIndexEngine extends Engine implements SupportsSemanticSearch
             throw new ScoutException('Embedding text requires the Laravel AI SDK. Please install the [laravel/ai] package.');
         }
 
-        $result = $embeddings::for($inputs)->cache()->generate()->embeddings; // @phpstan-ignore staticMethod.notFound
+        $result = $embeddings::for($inputs)->cache()->generate()->embeddings;
 
         if (! is_array($result) || count($result) !== count($inputs)) {
             throw new ScoutException('Laravel AI returned an unexpected number of embeddings.');

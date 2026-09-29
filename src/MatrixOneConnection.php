@@ -8,6 +8,7 @@ use Illuminate\Database\MySqlConnection;
 use Illuminate\Database\Query\Expression;
 use Illuminate\Database\QueryException;
 use Illuminate\Filesystem\Filesystem;
+use Illuminate\Support\Arr;
 use InvalidArgumentException;
 use MatrixOne\Concerns\RetriesTransactionConflicts;
 use MatrixOne\Connectors\MatrixOneConnector;
@@ -475,7 +476,15 @@ class MatrixOneConnection extends MySqlConnection
      */
     protected function lowerCaseKeys(array $rows): array
     {
-        return array_values(array_map(fn ($row) => array_change_key_case((array) $row), $rows));
+        return array_values(array_map(function (mixed $row): array {
+            $lowerCased = [];
+
+            foreach ((array) $row as $key => $value) {
+                $lowerCased[strtolower((string) $key)] = $value;
+            }
+
+            return $lowerCased;
+        }, $rows));
     }
 
     /**
@@ -624,7 +633,7 @@ class MatrixOneConnection extends MySqlConnection
         }
 
         $decoded = is_string($result) ? json_decode($result, true) : null;
-        $status = is_array($decoded) ? ($decoded['result'][0]['returnStr'] ?? null) : null;
+        $status = is_array($decoded) ? Arr::get($decoded, 'result.0.returnStr') : null;
 
         if ($status !== 'OK') {
             throw new RuntimeException("mo_ctl('dn', '{$command}', '{$argument}') failed: ".(is_scalar($result) ? (string) $result : 'no result'));

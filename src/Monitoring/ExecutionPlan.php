@@ -8,7 +8,7 @@ namespace MatrixOne\Monitoring;
 final class ExecutionPlan
 {
     /**
-     * @param  array<string, mixed>  $plan  the decoded JSON plan
+     * @param  array<mixed>  $plan  the decoded JSON plan
      */
     public function __construct(public readonly array $plan) {}
 
