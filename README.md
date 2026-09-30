@@ -105,7 +105,7 @@ See [AI Assistants](docs/docs/boost.md) for installation, updates, customization
 | Page | Content |
 |------|---------|
 | [Installation](docs/docs/installation.md) | Requirements and configuration |
-| [Docker](docs/docs/docker.md) | Standalone and S3-backed MatrixOne servers |
+| [Docker](docs/docs/docker.md) | Standalone and S3-backed MatrixOne servers, extra compute nodes |
 | [Query Builder](docs/docs/query-builder.md) | Behaviour differences, JSON, full-text and vector queries |
 | [Eloquent](docs/docs/eloquent.md) | Models, the `AsVector` cast, transactions |
 | [Full-text Search](docs/docs/full-text.md) | Parsers, relevance, session variables, FULLTEXT2 |

@@ -1,21 +1,22 @@
-service-type = "TN"
+# A second compute node (CN) joining the "matrixone" service: started with
+#   docker compose --profile scale up -d
+# It reads the same SHARED data on S3; only uuid, addresses and ports differ.
+service-type = "CN"
 data-dir = "/mo-data"
 
 [log]
 level = "info"
 
-[tn]
-uuid = "dd4dccb4-4d3c-41f8-b482-5251dc7a41bf"
-port-base = 19000
-# Advertise the compose service name instead of the default 127.0.0.1, which
-# only this container can reach. Needed by extra compute nodes (cn2/etc/cn.toml).
-service-host = "matrixone"
+[cn]
+# Unique per CN.
+uuid = "dd1dccb4-4d3c-41f8-b482-5251dc7a41c2"
+port-base = 18100
+# How the other services reach this CN: its compose service name.
+service-host = "cn2"
+sql-address = "cn2:6002"
 
-# The logtail server does not follow service-host: declare its address, or
-# compute nodes in other containers wait forever on 127.0.0.1:19001.
-[tn.LogtailServer]
-listen-address = "0.0.0.0:19001"
-service-address = "matrixone:19001"
+[cn.frontend]
+port = 6002
 
 [malloc]
 check-fraction = 65536
@@ -30,7 +31,7 @@ status-port = 7001
 [[fileservice]]
 name = "LOCAL"
 backend = "DISK"
-data-dir = "/mo-data/local/tn"
+data-dir = "/mo-data/local/cn2"
 
 # SHARED: MatrixOne table data, stored on S3.
 # backend = "MINIO" for MinIO, "S3" for AWS S3 and other S3-compatible
@@ -42,7 +43,7 @@ backend = "MINIO"
 [fileservice.cache]
 memory-capacity = "1GiB"
 disk-capacity = "10GiB"
-disk-path = "/mo-cache/tn"
+disk-path = "/mo-cache/cn2"
 
 [fileservice.s3]
 endpoint = "https://minio.example.com"
@@ -67,3 +68,7 @@ key-prefix = "mo/etl"
 region = "us-east-1"
 key-id = "YOUR_ACCESS_KEY"
 key-secret = "YOUR_SECRET_KEY"
+
+# The cluster is found through HAKeeper, in the log service of "matrixone".
+[hakeeper-client]
+service-addresses = ["matrixone:32001"]

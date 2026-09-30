@@ -27,3 +27,26 @@ services:
       # Local disk cache for the S3 data.
       - ./mo-cache:/mo-cache
     restart: unless-stopped
+
+  # Optional second compute node (manual scale-out), off by default:
+  #   docker compose --profile scale up -d
+  # It finds the cluster through HAKeeper at matrixone:32001 and serves SQL on
+  # 127.0.0.1:6002. See docs/docs/docker.md, "Adding compute nodes".
+  cn2:
+    image: matrixorigin/matrixone:${MATRIXONE_TAG:-4.2.4}
+    container_name: matrixone-cn2
+    profiles: [scale]
+    depends_on:
+      - matrixone
+    entrypoint:
+      - /mo-service
+      - -cfg
+      - /mo_confs/cn.toml
+    ports:
+      - "6002:6002"
+    volumes:
+      - ./cn2/etc:/mo_confs:ro
+      # Temporary files only: a CN keeps no data of its own.
+      - ./cn2/mo-data:/mo-data
+      - ./cn2/mo-cache:/mo-cache
+    restart: unless-stopped

@@ -8,7 +8,7 @@ A Laravel database driver for MatrixOne (MySQL wire protocol, default port 6001)
 
 ## Development Commands
 
-- `composer test` — PHPUnit (unit + feature). Feature tests need MatrixOne on 127.0.0.1:6001 (`cd docker/standalone && docker compose up -d`). Docker setups for a standalone and an S3-backed server live in `docker/`, documented in `docs/docs/docker.md`.
+- `composer test` — PHPUnit (unit + feature). Feature tests need MatrixOne on 127.0.0.1:6001 (`cd docker/standalone && docker compose up -d`). Docker setups for a standalone and an S3-backed server live in `docker/`, documented in `docs/docs/docker.md`; `docker/s3` also starts a second compute node (`--profile scale`, `cn2/etc/cn.toml`), which needs `service-host` on the main TN/CN and the TN logtail address.
 - `composer test:unit` / `composer test:feature`
 - `composer test:monitoring` — `tests/Monitoring`: statement history, plans and `matrixone:slow-queries`. Slow (waits for MatrixOne to publish statements), so excluded from `composer test`; `composer test:all` runs Unit, Feature and Monitoring.
 - `composer test:known-issues` — `tests/KnownIssues`: open MatrixOne bugs in plain SQL, asserting MySQL behaviour. Excluded from `composer test`; failures are expected until MatrixOne fixes them.

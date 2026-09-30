@@ -7,6 +7,9 @@ level = "info"
 [cn]
 uuid = "dd1dccb4-4d3c-41f8-b482-5251dc7a41bf"
 port-base = 18000
+# Advertise the compose service name instead of the default 127.0.0.1, which
+# only this container can reach. Needed by extra compute nodes (cn2/etc/cn.toml).
+service-host = "matrixone"
 
 [malloc]
 check-fraction = 65536
