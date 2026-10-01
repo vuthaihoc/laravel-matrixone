@@ -164,7 +164,7 @@ MatrixOne separates storage from compute. The transaction node (TN) and the log 
                   both CNs read table data from the same S3 bucket
 ```
 
-This needs the [S3 setup](#standalone-with-s3-storage): a CN can only read data it can reach, and the local-disk standalone keeps its data inside its own container. It is meant for development and experiments (separating an analytics workload, trying read/write splitting, seeing how a CN joins and leaves), not for high availability: all services run on one host, with one TN and one log service.
+This needs the [S3 setup](#standalone-with-s3-storage): a CN can only read data it can reach, and the local-disk standalone keeps its data inside its own container. It is meant for development and experiments (separating an analytics workload, trying read/write splitting, seeing how a CN joins and leaves), not for high availability: there is one TN and one log service. The extra CN runs on the same host or on [another one](#a-compute-node-on-another-host).
 
 ### How a CN joins
 
@@ -190,6 +190,7 @@ A new CN only needs the HAKeeper address. HAKeeper, which runs inside the log se
   uuid = "dd1dccb4-4d3c-41f8-b482-5251dc7a41bf"
   port-base = 18000
   service-host = "matrixone"
+  sql-address = "matrixone:6001"   # used by the other CNs for background tasks
   ```
 
   The log service keeps its defaults: its raft address is stored with its data, and CNs only need HAKeeper, which listens on all interfaces. These settings also work without a second CN, and the existing data is kept.
@@ -245,7 +246,7 @@ The CN is ready within a few seconds, with no data copied. Check that both CNs a
 
 ```sql
 show backend servers;
--- dd1dccb4-...-5251dc7a41bf  127.0.0.1:6001  Working
+-- dd1dccb4-...-5251dc7a41bf  matrixone:6001  Working
 -- dd1dccb4-...-5251dc7a41c2  cn2:6002        Working
 ```
 
@@ -260,6 +261,71 @@ docker compose stop cn2
 ```
 
 HAKeeper drops the CN from `show backend servers` after about 20 seconds; the other CN keeps serving reads and writes. The first write after that may fail once with `20702 lock table bind changed`, while lock tables held by the stopped CN move to another one. This driver retries that error ([`retry_attempts`](./installation)), and a retried statement succeeds. `docker compose --profile scale up -d` brings the CN back.
+
+### A compute node on another host
+
+A CN can also run on a second machine, as long as the two hosts reach each other on a private network (a LAN, a VPN, Tailscale...). `docker/s3/remote-cn/` holds the files for that machine.
+
+```
+main host 10.0.0.1                              second host 10.0.0.2
+┌─ matrixone ──────────────┐                    ┌─ cn3 ─────────────────┐
+│ CN 1, TN, log + HAKeeper │◀── 32001, 19000- ──│ CN 3                  │
+├─ cn2 (optional) ─────────┤    19002, 18000-   │ SQL 6003              │
+│ CN 2                     │    18003, 18100-   │ internal 18200-18203  │
+└──────────────────────────┘    18103           └───────────────────────┘
+             └────────────── 18200-18203 ──────────────▶
+```
+
+Connections go both ways: the CN calls HAKeeper, the TN and the other CNs; they call it back. The names the main server advertises (`matrixone`, `cn2`) stay as they are, and the remote CN resolves them to the main host with `extra_hosts`.
+
+1. **Main host**: publish the cluster-internal ports on an address the second host can reach. `docker/s3/compose.yml` binds them to loopback unless `MATRIXONE_CLUSTER_IP` is set:
+
+   ```bash
+   cd docker/s3
+   echo "MATRIXONE_CLUSTER_IP=10.0.0.1" >> .env
+   docker compose --profile scale up -d      # or without the profile, for CN 1 only
+   ```
+
+2. **Second host**: copy `docker/s3/remote-cn/` to it, then set the two addresses in `.env`:
+
+   ```bash
+   cp .env.example .env
+   # MATRIXONE_MAIN_IP=10.0.0.1   the main host, as seen from here
+   # CN_HOST_IP=10.0.0.2          this host, as seen from the main host
+   ```
+
+   In `etc/cn.toml`, advertise the same address and fill in the `[fileservice.s3]` settings of the main server:
+
+   ```toml
+   [cn]
+   uuid = "dd1dccb4-4d3c-41f8-b482-5251dc7a41c3"
+   port-base = 18200
+   service-host = "10.0.0.2"
+   sql-address = "10.0.0.2:6003"
+
+   [cn.frontend]
+   port = 6003
+
+   [hakeeper-client]
+   service-addresses = ["matrixone:32001"]
+   ```
+
+   ```bash
+   docker compose up -d
+   ```
+
+3. `show backend servers` on the main host lists the new CN as `10.0.0.2:6003  Working`, and port 6003 on the second host serves the same data. When the main server restarts, the CN reconnects by itself.
+
+Requirements:
+
+- **CPU**: the MatrixOne image needs x86-64-v3 (AVX2: Intel Haswell, AMD Excavator, or newer). On an older CPU the container exits at once with `This program can only be run on AMD64 processors with v3 microarchitecture support`.
+- **Same version**: run the image tag, or better the image digest, of the main server.
+- **Network, both directions**: from the second host, ports 32001, 19000-19002, 18000-18003 (and 18100-18103 with CN 2) of the main host; from the main host, ports 18200-18203 of the second host; 18003, 18103 and 18203 also over UDP. Test them before starting (`nc -zv 10.0.0.1 32001`). VPN access rules often allow one direction only.
+- **Storage**: the second host reaches the S3 endpoint itself.
+- **Clocks**: both hosts synchronized (NTP / chrony).
+- **No authentication on the internal ports**: bind them to a private address only, never a public one.
+
+The second host adds compute, not availability: the TN and the log service still run on the main host only, and the CN waits for them when the main host is down.
 
 ### Using the CNs from Laravel
 
@@ -283,7 +349,7 @@ Each CN has its own cache (`[fileservice.cache] memory-capacity`). On a developm
 :::
 
 ::: warning Not covered here
-A CN on another host also needs the log service and the TN reachable over the network, with `service-host` set to host names or IPs and ports 32000-32002, 19000-19002 and 18000-18002 open. A single SQL entry point that balances sessions across CNs needs the MatrixOne proxy (`/etc/launch-with-proxy` in the image, `proxy-enabled = true` on each CN). Neither is part of these files.
+A single SQL entry point that balances sessions across CNs needs the MatrixOne proxy (`/etc/launch-with-proxy` in the image, `proxy-enabled = true` on each CN). More than one TN or log service, for availability, needs a real cluster deployment. Neither is part of these files.
 :::
 
 ## Other deployments

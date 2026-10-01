@@ -1,0 +1,32 @@
+# A compute node on another host, joining the MatrixOne server of docker/s3.
+# 1. On the main server: set MATRIXONE_CLUSTER_IP and `docker compose up -d`.
+# 2. Here: copy .env.example to .env, set the two addresses, put this host's
+#    address in etc/cn.toml (service-host, sql-address) with the S3 settings,
+#    then `docker compose up -d`.
+# See docs/docs/docker.md, "A compute node on another host".
+services:
+  cn3:
+    # Every CN must run the same MatrixOne version as the main server. The CPU
+    # must support x86-64-v3 (AVX2, Intel Haswell / AMD Excavator or newer).
+    image: matrixorigin/matrixone:${MATRIXONE_TAG:-4.2.4}
+    container_name: matrixone-cn3
+    # The main server advertises its services as "matrixone" and "cn2".
+    extra_hosts:
+      - "matrixone:${MATRIXONE_MAIN_IP:?set MATRIXONE_MAIN_IP in .env}"
+      - "cn2:${MATRIXONE_MAIN_IP}"
+    entrypoint:
+      - /mo-service
+      - -cfg
+      - /mo_confs/cn.toml
+    ports:
+      # SQL, and the ports the main server calls back (gossip also over UDP),
+      # published on the address this CN advertises.
+      - "${CN_HOST_IP:?set CN_HOST_IP in .env}:6003:6003"
+      - "${CN_HOST_IP}:18200-18203:18200-18203"
+      - "${CN_HOST_IP}:18203:18203/udp"
+    volumes:
+      - ./etc:/mo_confs:ro
+      # Temporary files only: a CN keeps no data of its own.
+      - ./mo-data:/mo-data
+      - ./mo-cache:/mo-cache
+    restart: unless-stopped

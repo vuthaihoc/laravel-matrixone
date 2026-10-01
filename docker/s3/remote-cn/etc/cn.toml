@@ -1,3 +1,6 @@
+# A compute node (CN) on another host, joining the server of docker/s3.
+# Copy this directory (remote-cn/) to that host. It reads the same SHARED data
+# on S3: use the same [fileservice.s3] settings as the main server.
 service-type = "CN"
 data-dir = "/mo-data"
 
@@ -5,14 +8,16 @@ data-dir = "/mo-data"
 level = "info"
 
 [cn]
-uuid = "dd1dccb4-4d3c-41f8-b482-5251dc7a41bf"
-port-base = 18000
-# Advertise the compose service name instead of the default 127.0.0.1, which
-# only this container can reach. Needed by extra compute nodes (cn2/etc/cn.toml).
-service-host = "matrixone"
-# The SQL address other CNs use for background tasks. The default,
-# 127.0.0.1:6001, makes a CN on another host call itself.
-sql-address = "matrixone:6001"
+# Unique per CN.
+uuid = "dd1dccb4-4d3c-41f8-b482-5251dc7a41c3"
+port-base = 18200
+# How the main server reaches this CN: an address of THIS host that the main
+# server can connect to (the same value as CN_HOST_IP in .env).
+service-host = "CN_HOST_IP"
+sql-address = "CN_HOST_IP:6003"
+
+[cn.frontend]
+port = 6003
 
 [malloc]
 check-fraction = 65536
@@ -27,7 +32,7 @@ status-port = 7001
 [[fileservice]]
 name = "LOCAL"
 backend = "DISK"
-data-dir = "/mo-data/local/cn"
+data-dir = "/mo-data/local/cn3"
 
 # SHARED: MatrixOne table data, stored on S3.
 # backend = "MINIO" for MinIO, "S3" for AWS S3 and other S3-compatible
@@ -39,7 +44,7 @@ backend = "MINIO"
 [fileservice.cache]
 memory-capacity = "1GiB"
 disk-capacity = "10GiB"
-disk-path = "/mo-cache/cn"
+disk-path = "/mo-cache/cn3"
 
 [fileservice.s3]
 endpoint = "https://minio.example.com"
@@ -64,3 +69,8 @@ key-prefix = "mo/etl"
 region = "us-east-1"
 key-id = "YOUR_ACCESS_KEY"
 key-secret = "YOUR_SECRET_KEY"
+
+# The cluster is found through HAKeeper, in the log service of the main server.
+# "matrixone" resolves to MATRIXONE_MAIN_IP through extra_hosts in compose.yml.
+[hakeeper-client]
+service-addresses = ["matrixone:32001"]

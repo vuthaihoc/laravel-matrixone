@@ -18,6 +18,14 @@ services:
       - /mo_confs/launch.toml
     ports:
       - "6001:6001"
+      # Cluster-internal ports for a compute node on another host (remote-cn/):
+      # HAKeeper, TN (txn, logtail, lock) and this CN (pipeline, lock, query,
+      # gossip; gossip also over UDP). They have no authentication: bound to
+      # loopback unless MATRIXONE_CLUSTER_IP names a private address of this host.
+      - "${MATRIXONE_CLUSTER_IP:-127.0.0.1}:32001:32001"
+      - "${MATRIXONE_CLUSTER_IP:-127.0.0.1}:19000-19002:19000-19002"
+      - "${MATRIXONE_CLUSTER_IP:-127.0.0.1}:18000-18003:18000-18003"
+      - "${MATRIXONE_CLUSTER_IP:-127.0.0.1}:18003:18003/udp"
     volumes:
       # launch.toml, cn.toml, tn.toml and log.toml
       - ./etc:/mo_confs:ro
@@ -44,6 +52,9 @@ services:
       - /mo_confs/cn.toml
     ports:
       - "6002:6002"
+      # Lets a compute node on another host reach this CN (see above).
+      - "${MATRIXONE_CLUSTER_IP:-127.0.0.1}:18100-18103:18100-18103"
+      - "${MATRIXONE_CLUSTER_IP:-127.0.0.1}:18103:18103/udp"
     volumes:
       - ./cn2/etc:/mo_confs:ro
       # Temporary files only: a CN keeps no data of its own.
