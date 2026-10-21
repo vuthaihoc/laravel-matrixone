@@ -8,7 +8,7 @@ metadata:
 
 # MatrixOne with Laravel
 
-`vuthaihoc/laravel-matrixone` registers the `matrixone` driver on top of Laravel's MySQL stack. Most Laravel code works unchanged; this skill lists what differs and how to design around it. Behaviour was verified on MatrixOne 4.2.4.
+`vuthaihoc/laravel-matrixone` registers the `matrixone` driver on top of Laravel's MySQL stack. Most Laravel code works unchanged; this skill lists what differs and how to design around it. Behaviour was verified on MatrixOne 4.2.4 and 4.2.6.
 
 ## Connection
 
@@ -38,7 +38,7 @@ The database must exist before migrating (`create database laravel;`).
 
 | Need | Do | Avoid |
 |------|----|-------|
-| Full-text search | `$table->fullText([...])` on a table **without its own foreign keys** | FULLTEXT + foreign key on one table: inserts panic on 4.2.4 |
+| Full-text search | `$table->fullText([...])` on a table **without its own foreign keys** | FULLTEXT + foreign key on one table: inserts panic on 4.2.4 to 4.2.6 |
 | Search inside JSON | `$table->fullText('meta')->parser('json')` | Indexing the JSON column directly |
 | CJK text | `->parser('ngram')` | Default parser for Chinese/Japanese |
 | Search box / autocomplete | `suggest()`, `whereStartsWith()`, `whereContains()` (no fuzzy search on MatrixOne) | `->parser('ngram')` for partial Latin words (it indexes whole words), raw `like` with unescaped `%`/`_` |
@@ -108,6 +108,9 @@ Document::nearestTo('embedding', $vector, 10)->get();                 // cosine
 Document::nearestTo('embedding', $vector, 10, metric: 'l2')->get();
 Document::whereVectorSimilarTo('embedding', $vector, minSimilarity: 0.8)->get();
 Document::whereVectorDistanceUsing('cosine', 'embedding', $vector, '<', 0.3)->get();
+// More like this: the vector of another row as a subquery (searched through the index on 4.2.6+
+// when the vector column is NOT NULL). Never add whereKeyNot(): 4.2.6 panics. Drop the source in PHP.
+Document::nearestTo('embedding', Document::select('embedding')->whereKey($doc->id), 6)->get()->except($doc->id);
 ```
 
 ## Analytics
@@ -132,7 +135,7 @@ Order::query()->asOfSnapshot('orders_eod')->sum('total');
 DB::table('orders')->asOfTimestamp(now()->subHour())->count();
 ```
 
-- `RESTORE ... FROM SNAPSHOT` fails on 4.2.4: restore with `insertUsing([...], DB::table('t')->asOfSnapshot('s')->select([...])->whereNotIn('id', DB::table('t')->select('id')))`.
+- `RESTORE ... FROM SNAPSHOT` fails on 4.2.4 to 4.2.6: restore with `insertUsing([...], DB::table('t')->asOfSnapshot('s')->select([...])->whereNotIn('id', DB::table('t')->select('id')))`.
 - Time travel applies to the `from` table only; time-travel joins through `joinSub()`.
 - `php artisan matrixone:snapshot create|drop|list` and `matrixone:pitr create|alter|drop|list --range=7d`.
 - `$table->clusterBy(['device', 'recorded_at'])` in `Schema::create()` only, and only on tables without a primary key (no `id()`; a unique index is fine): use it for append-only facts.
@@ -243,13 +246,14 @@ Article::search('songs')->hybrid(textWeight: 1, semanticWeight: 2)->get();
 - Laravel's `RefreshDatabase`, `DatabaseTransactions`, `DatabaseTruncation` and `DatabaseMigrations` work unchanged. Because of flattening, a failing inner transaction inside a `RefreshDatabase` test keeps its writes until the test ends.
 - Truncation of tables referenced by foreign keys falls back to `DELETE` automatically.
 
-## Known server bugs (4.2.4) and how to avoid them
+## Known server bugs (4.2.4 to 4.2.6) and how to avoid them
 
 | Symptom | Trigger | Avoid |
 |---------|---------|-------|
 | `panic runtime error: invalid memory address` on INSERT | Table with a foreign key **and** a FULLTEXT index | Separate the FULLTEXT table from foreign keys |
 | `Error reading result set's header`, then the next queries fail or a test hangs | `loadCount()` / `withCount()` (also `withSum()`-style aggregates using `count(*)`) on **one** parent selected by primary key (`find($id)`, `where('id', $id)`, `whereIn('id', [$id])`), when the related query has an extra condition such as SoftDeletes | Count separately for a single model: `$user->posts()->count()`. `withCount()` over several parents and `withExists()` are fine |
 | Wrong IDs from raw `LAST_INSERT_ID()` | Tables with a FULLTEXT index | Use `insertGetId()` / Eloquent (the driver uses `RETURNING`) |
+| `Error reading result set's header` (4.2.6), or fewer rows than the limit | `nearestTo()` with a subquery vector plus a primary-key filter (`whereKeyNot($id)`, `id > ...`) on an IVF-indexed column | Fetch one more row and drop the source row in PHP: `->get()->except($id)` |
 
 | **Silently wrong results** (`NULL` values) | A correlated scalar subquery with `limit`, e.g. `addSelect(['last' => Post::select('title')->whereColumn('user_id', 'users.id')->latest()->limit(1)])` | Use `hasOne(...)->latestOfMany()` / `ofMany()` relationships or aggregate subqueries (`max()`) |
 | `aggregate function sum, bad value [VARCHAR]` | `null as col` placeholders in a `UNION` | `cast(null as double) as col` |

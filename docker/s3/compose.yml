@@ -3,7 +3,7 @@
 #   docker compose up -d
 services:
   matrixone:
-    image: matrixorigin/matrixone:${MATRIXONE_TAG:-4.2.4}
+    image: matrixorigin/matrixone:${MATRIXONE_TAG:-4.2.6}
     container_name: matrixone-s3
     # The log service stores its data under a directory named after the
     # hostname. Keep it fixed, or a re-created container fails to start
@@ -41,7 +41,7 @@ services:
   # It finds the cluster through HAKeeper at matrixone:32001 and serves SQL on
   # 127.0.0.1:6002. See docs/docs/docker.md, "Adding compute nodes".
   cn2:
-    image: matrixorigin/matrixone:${MATRIXONE_TAG:-4.2.4}
+    image: matrixorigin/matrixone:${MATRIXONE_TAG:-4.2.6}
     container_name: matrixone-cn2
     profiles: [scale]
     depends_on:

@@ -245,7 +245,7 @@ Article::search('how to store songs')->semantic()->get(); // cosine similarity
 Article::search('songs')->hybrid()->get();                // rank fusion of both
 ```
 
-The table needs a `vector('embedding', <dimensions>)` column (or the column named by `searchableEmbeddingColumn()`) and, for full-text columns, a FULLTEXT index; keep that table free of foreign keys (MatrixOne 4.2.4). Embeddings of search terms are generated with the [Laravel AI SDK](https://github.com/laravel/ai) (`laravel/ai`).
+The table needs a `vector('embedding', <dimensions>)` column (or the column named by `searchableEmbeddingColumn()`) and, for full-text columns, a FULLTEXT index; keep that table free of foreign keys (MatrixOne 4.2.4 to 4.2.6). Embeddings of search terms are generated with the [Laravel AI SDK](https://github.com/laravel/ai) (`laravel/ai`).
 
 To keep your models in another database and use MatrixOne only as the search index (like Meilisearch), use the `matrixone-index` engine: see [Integrations › MatrixOne as a separate search index](./integrations#matrixone-as-a-separate-search-index).
 
@@ -289,7 +289,7 @@ MatrixOne has **no fuzzy (typo-tolerant) search**: no trigram similarity (`pg_tr
 
 ## Limitations
 
-- **MatrixOne 4.2.4 crash:** inserting into a table that has both its own foreign key and a FULLTEXT index panics in the query planner. Keep full-text indexes on tables without foreign keys (being *referenced* by a foreign key is fine).
+- **MatrixOne 4.2.4 to 4.2.6 crash:** inserting into a table that has both its own foreign key and a FULLTEXT index panics in the query planner. Keep full-text indexes on tables without foreign keys (being *referenced* by a foreign key is fine).
 - **`LAST_INSERT_ID()` is wrong on FULLTEXT tables.** The driver already reads generated keys with `insert ... returning`; avoid `select last_insert_id()` in raw SQL.
 - Query expansion is not supported.
 - `MATCH ... AGAINST` cannot be combined with other conditions by `OR` (`->orWhereFullText()` next to other `where`s). Select the matches with a subquery instead: `->orWhereIn('id', DB::table('articles')->select('id')->whereFullText('body', $term))`.

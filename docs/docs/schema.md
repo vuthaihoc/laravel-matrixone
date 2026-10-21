@@ -73,7 +73,7 @@ $table->fullText(['title', 'body'])->parser('ngram');
 $table->fullText('meta')->parser('json');   // JSON columns
 ```
 
-See [Full-text Search](./full-text) for parsers, relevance, session variables, FULLTEXT2 and the MatrixOne 4.2.4 foreign-key crash.
+See [Full-text Search](./full-text) for parsers, relevance, session variables, FULLTEXT2 and the MatrixOne 4.2 foreign-key crash.
 
 ## Vector columns and indexes
 

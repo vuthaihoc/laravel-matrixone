@@ -1,6 +1,6 @@
 # MatrixOne Compatibility
 
-MatrixOne speaks the MySQL 8.0 protocol but implements a subset of MySQL. This page lists every difference the driver handles, verified against MatrixOne 4.2.4 (and 3.0.9 where noted).
+MatrixOne speaks the MySQL 8.0 protocol but implements a subset of MySQL. This page lists every difference the driver handles, verified against MatrixOne 4.2.6 and 4.2.4 (and 3.0.9 where noted).
 
 ## Handled transparently
 
@@ -69,10 +69,11 @@ composer test:known-issues
 - **Correlated subqueries with `LIMIT` return wrong results, silently.** `addSelect(['last_post' => Post::select('title')->whereColumn('user_id', 'users.id')->latest()->limit(1)])` yields `NULL` for most rows. Use a relationship with `latestOfMany()` / `ofMany()` (compiled with aggregates and joins, which work) or an aggregate subquery (`selectRaw('(select max(created_at) ...)')`).
 - **A bare `NULL` in a `UNION` is typed `VARCHAR`**, so aggregates over the union fail. Cast placeholders: `cast(null as double)`.
 - **`DELETE` affected rows include rows removed by `ON DELETE CASCADE`** (MySQL counts only the statement's rows).
-- **4.2.4 panic on correlated counts.** `loadCount()` / `withCount()` on a single parent selected by primary key (`find($id)`, `whereIn('id', [$id])`) crashes the server when the related query has an extra condition, e.g. SoftDeletes (`Error reading result set's header`). Count on the relation instead: `$user->posts()->count()`. The driver drops the broken connection, forgetting its transaction, so later queries reconnect instead of blocking on the row locks the dead session still holds.
+- **Panic on correlated counts (4.2.4 to 4.2.6).** `loadCount()` / `withCount()` on a single parent selected by primary key (`find($id)`, `whereIn('id', [$id])`) crashes the server when the related query has an extra condition, e.g. SoftDeletes (`Error reading result set's header`). Count on the relation instead: `$user->posts()->count()`. The driver drops the broken connection, forgetting its transaction, so later queries reconnect instead of blocking on the row locks the dead session still holds.
 - `=` compares strings case-sensitively even on `_ci` collations; the driver cannot change this without losing index use. Use the `Lowercase` cast or `whereIgnoreCase()` ([Query Builder › Case-insensitive equality](./query-builder#case-insensitive-equality)).
-- **4.2.4:** inserting into a table with both a foreign key and a FULLTEXT index panics in the query planner. Keep full-text indexes on tables without their own foreign keys.
-- **`RESTORE ... FROM SNAPSHOT` is a syntax error** on 4.2.4. Copy the rows back with `insertUsing()` and `asOfSnapshot()` ([Analytics › Restoring data](./analytics#restoring-data)).
+- **4.2.4 to 4.2.6:** inserting into a table with both a foreign key and a FULLTEXT index panics in the query planner. Keep full-text indexes on tables without their own foreign keys.
+- **`RESTORE ... FROM SNAPSHOT` is a syntax error** on 4.2.4 to 4.2.6. Copy the rows back with `insertUsing()` and `asOfSnapshot()` ([Analytics › Restoring data](./analytics#restoring-data)).
+- **4.2.6: a subquery vector plus a primary-key filter breaks the vector index search.** `nearestTo('embedding', Post::select('embedding')->whereKey($id), 5)` combined with `whereKeyNot($id)` (or `id > ...`, `id not in (...)`) panics on tables of a few thousand rows (`Error reading result set's header`) and returns fewer rows than the limit on smaller ones. Fetch one more row and drop the source row in PHP ([Query Builder › Similar rows](./query-builder#similar-rows-the-vector-of-another-row)).
 - **A `DESC` key after a boolean `ORDER BY` key is ignored**: `order by score is null, score desc` returns rows in insertion order. To sort NULLs last, `order by score desc` already puts them last on MatrixOne; for ascending order `order by score is null, score asc` works. Wrapping the descending key in `coalesce()` also avoids the bug: `order by has_sync desc, coalesce(ratio, 0) desc`.
 - **FULLTEXT2** indexes (4.2.2+) are experimental and are not indexed synchronously; the driver does not use them.
 - **HNSW** vector indexes are experimental: they need a signed `BIGINT` primary key and are maintained asynchronously (sync with `alter reindex ... hnsw force_sync`). `vectorIndex()` builds IVF-Flat unless `->hnsw()` is called.

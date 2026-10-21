@@ -3,7 +3,7 @@
 #   mysql -h 127.0.0.1 -P 6001 -u root -p111
 services:
   matrixone:
-    image: matrixorigin/matrixone:${MATRIXONE_TAG:-4.2.4}
+    image: matrixorigin/matrixone:${MATRIXONE_TAG:-4.2.6}
     container_name: matrixone
     # The log service stores its data under a directory named after the
     # hostname. Keep it fixed, or a re-created container fails to start

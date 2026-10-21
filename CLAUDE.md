@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A Laravel database driver for MatrixOne (MySQL wire protocol, default port 6001). It registers the `matrixone` driver and builds on Laravel's MySQL connection, connector and grammars, overriding only where MatrixOne differs. Supports PHP 8.2+, Laravel 12 and 13, MatrixOne 4.2+.
+A Laravel database driver for MatrixOne (MySQL wire protocol, default port 6001). It registers the `matrixone` driver and builds on Laravel's MySQL connection, connector and grammars, overriding only where MatrixOne differs. Supports PHP 8.2+, Laravel 12 and 13, MatrixOne 4.2+ (tested on 4.2.4 and 4.2.6).
 
 ## Development Commands
 
@@ -29,7 +29,7 @@ Local runs may use a gitignored `phpunit.xml` (copied from `phpunit.xml.dist`) t
 - Monitoring: `MatrixOneConnection::statementLog()` (`src/Monitoring/StatementLogQuery.php`, a builder on `system.statement_info` with replaceable default filters), `getStatementPlan()` (`ExecutionPlan`), `tableStats()` and the `matrixone:slow-queries` command.
 - Session variables at runtime: `MatrixOneConnection::setSessionVariables()`, `getSessionVariables()`, `withSessionVariables()`.
 - `src/Query/Grammar.php` — MySQL grammar overrides (exists, upsert, locks, RAND, savepoints off, JSON, DELETE safeguard, vector distance).
-- `src/Query/Builder.php` — analytics (`timeWindow`, `sample`, `samplePercent`, `asOfSnapshot`, `asOfTimestamp`, compiled by the grammar's `compileTimeWindow`/`compileColumns`/`compileFrom`), truncate fallback, full-text relevance helpers (`searchFullText`, `selectFullTextRelevance`, `orderByFullTextRelevance`), suggestions (`whereStartsWith`, `whereContains`, `suggest`; no fuzzy search on MatrixOne), vector helpers (`nearestTo`, `*VectorDistanceUsing`) and overrides of Laravel's vector methods.
+- `src/Query/Builder.php` — analytics (`timeWindow`, `sample`, `samplePercent`, `asOfSnapshot`, `asOfTimestamp`, compiled by the grammar's `compileTimeWindow`/`compileColumns`/`compileFrom`), truncate fallback, full-text relevance helpers (`searchFullText`, `selectFullTextRelevance`, `orderByFullTextRelevance`), suggestions (`whereStartsWith`, `whereContains`, `suggest`; no fuzzy search on MatrixOne), vector helpers (`nearestTo`, `*VectorDistanceUsing`; vectors may be subqueries) and overrides of Laravel's vector methods.
 - `src/Query/Processors/MatrixOneProcessor.php` — normalizes column/index metadata.
 - `src/Schema/Grammar.php`, `Builder.php` — DDL and introspection overrides, vector columns and indexes. Blueprint additions (`vector64`, and `vectorIndex`/`dropVectorIndex` on Laravel versions lacking them) are macros registered in `MatrixOneServiceProvider::registerBlueprintMacros()`; do not reintroduce a Blueprint subclass.
 - `src/Eloquent/Casts/AsVector.php`, `src/Support/Vector.php` — vector literal conversion.
@@ -43,8 +43,9 @@ Local runs may use a gitignored `phpunit.xml` (copied from `phpunit.xml.dist`) t
 - Boolean expressions return the strings `"true"`/`"false"`; `(bool) "false"` is true in PHP. Any grammar query whose result is cast to bool must return an integer (`if(expr, 1, 0)`).
 - No `ROLLBACK TO SAVEPOINT`; nested transactions are flattened (`nested_transactions` => `rollback_only` makes the outermost commit throw instead).
 - An unconditional `DELETE` with `foreign_key_checks = 0` corrupts FK metadata — keep the `where 1 = 1` safeguard.
-- 4.2.4: inserting into a table with both a foreign key and a FULLTEXT index panics.
-- 4.2.4: a correlated `count(*)` with an extra predicate, selected by a single primary key (`loadCount()` on one soft-deletable model), panics and leaves the connection mid-response. Tests that trigger it must not share a connection with later tests.
+- 4.2.4 to 4.2.6: inserting into a table with both a foreign key and a FULLTEXT index panics.
+- 4.2.4 to 4.2.6: a correlated `count(*)` with an extra predicate, selected by a single primary key (`loadCount()` on one soft-deletable model), panics and leaves the connection mid-response. Tests that trigger it must not share a connection with later tests.
+- 4.2.6: an IVF search with a scalar-subquery vector (`nearestTo($column, $subquery)`) plus a primary-key filter panics (larger tables) or returns too few rows. The index path also needs a NOT NULL vector column.
 - `LAST_INSERT_ID()` is wrong on tables with a FULLTEXT index; `insertGetId()` must keep using `insert ... returning`.
 - Every `SET` assignment of an UPDATE reads the original row: never emit two assignments to one column (JSON path updates are merged into one `json_set()`).
 - `on duplicate key update` may not assign the primary key: `compileUpsert()` drops `uniqueBy` columns from the update list (the database cache store depends on it).

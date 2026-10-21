@@ -12,7 +12,7 @@
 |-----------|---------|
 | PHP | 8.2+ with `pdo_mysql` |
 | Laravel | 12.x or 13.x |
-| MatrixOne | 4.2+ (tested on 4.2.4) |
+| MatrixOne | 4.2+ (tested on 4.2.6 and 4.2.4) |
 
 ## Install the package
 
@@ -80,7 +80,7 @@ The driver accepts every option of Laravel's `mysql` driver (`read` / `write` ho
 ## Running MatrixOne locally
 
 ```bash
-docker run -d -p 6001:6001 --name matrixone matrixorigin/matrixone:4.2.4
+docker run -d -p 6001:6001 --name matrixone matrixorigin/matrixone:4.2.6
 ```
 
 The default account is `root` with password `111`. See [Running MatrixOne with Docker](./docker) for a persistent standalone setup and for storing data on S3.

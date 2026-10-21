@@ -34,7 +34,7 @@ DB::table('sales')->selectRaw('region, product, sum(amount)')->groupByRaw('cube(
 DB::table('sales')->selectRaw('median(amount), approx_percentile(amount, 0.95), approx_count_distinct(customer_id)')->first();
 ```
 
-Verified on MatrixOne 4.2.4:
+Verified on MatrixOne 4.2.4 and 4.2.6:
 
 | Works | Not supported |
 |-------|---------------|
@@ -146,7 +146,7 @@ php artisan matrixone:pitr list
 
 ### Restoring data
 
-`RESTORE ... FROM SNAPSHOT` is a syntax error on MatrixOne 4.2.4 (see [Compatibility › Known MatrixOne issues](./compatibility#known-matrixone-issues)). Copy the rows back from the snapshot instead:
+`RESTORE ... FROM SNAPSHOT` is a syntax error on MatrixOne 4.2.4 to 4.2.6 (see [Compatibility › Known MatrixOne issues](./compatibility#known-matrixone-issues)). Copy the rows back from the snapshot instead:
 
 ```php
 DB::table('orders')->insertUsing(

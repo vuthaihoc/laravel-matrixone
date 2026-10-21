@@ -51,7 +51,7 @@ The `KnownIssues` suite is excluded from `composer test`; each test asserts MySQ
 
 
 ```bash
-(cd docker/standalone && docker compose up -d)   # MatrixOne 4.2.4 on port 6001
+(cd docker/standalone && docker compose up -d)   # MatrixOne 4.2.6 on port 6001
 composer test                 # unit + feature tests
 ```
 

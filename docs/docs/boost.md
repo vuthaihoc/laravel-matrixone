@@ -20,7 +20,7 @@ The package ships resources for [Laravel Boost](https://laravel.com/docs/boost) 
 
 The **guideline** is short. It holds only the rules an agent must never break:
 
-- no FULLTEXT index on a table that has its own foreign key (MatrixOne 4.2.4 panics on insert);
+- no FULLTEXT index on a table that has its own foreign key (MatrixOne 4.2.4 to 4.2.6 panic on insert);
 - `=` comparisons and unique indexes are case-sensitive, so normalize with the `Lowercase` cast;
 - JSON columns take no defaults or indexes;
 - nested transactions do not roll back on their own (no savepoints);
@@ -43,7 +43,7 @@ The **skill** is the detailed reference an agent reads before designing a schema
 | Laravel Pulse and Telescope | The Pulse migration to publish |
 | Cache, queue and sessions | Database drivers, queue workers without `SKIP LOCKED` |
 | Transactions and tests | Flattened transactions, `RefreshDatabase`, `DatabaseTruncation` |
-| Known server bugs | MatrixOne 4.2.4 bugs and how to avoid them |
+| Known server bugs | MatrixOne 4.2 bugs and how to avoid them |
 | When something fails | Error messages and what they mean |
 
 ## Installation

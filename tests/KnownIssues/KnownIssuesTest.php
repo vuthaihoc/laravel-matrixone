@@ -3,8 +3,8 @@
 namespace MatrixOne\Tests\KnownIssues;
 
 /**
- * Last verified against MatrixOne 4.2.4: 12 failures (open issues) and 5
- * passes (issues fixed since 3.0.9, kept as regression checks).
+ * Last verified against MatrixOne 4.2.6: 23 failures (open issues, the 22 of
+ * 4.2.4 plus one 4.2.6 panic) and 4 passes (issues fixed since 3.0.9, kept as regression checks).
  */
 class KnownIssuesTest extends TestCase
 {
@@ -27,6 +27,31 @@ class KnownIssuesTest extends TestCase
         $this->runSql("insert into fkft_children (parent_id, title) values ({$parent}, 'hello world')");
 
         $this->assertSame(1, (int) $this->runSql("select count(*) as c from fkft_children where match(title) against('hello')")[0]['c']);
+    }
+
+    /**
+     * 4.2.6 panic: "index out of range [0] with length 0" when the IVF index is
+     * searched with a scalar-subquery vector and the query also filters on the
+     * primary key (`id <> 1`, `id > 1`, `id not in (...)`): the "more like this
+     * row" query. Seen from about 5000 rows; smaller tables return fewer rows
+     * than the limit instead. A literal vector or a filter on another column works.
+     * Driver workaround: none; the docs advise fetching one more row and
+     * dropping the source row in PHP.
+     */
+    public function testSubqueryVectorWithAPrimaryKeyFilter(): void
+    {
+        $this->runSql(
+            'create table sv_items (id bigint primary key, embedding vecf32(3) not null)',
+            "insert into sv_items select result, concat('[', result % 7 + 1, ',', result % 11, ',', result % 13, ']') from generate_series(1, 5000) g",
+            "create index sv_items_ivf using ivfflat on sv_items(embedding) lists = 4 op_type 'vector_cosine_ops'",
+        );
+
+        $rows = $this->runSql(
+            'select id from sv_items where id <> 1 '
+            .'order by cosine_distance(embedding, (select embedding from sv_items where id = 1)) limit 5'
+        );
+
+        $this->assertCount(5, $rows);
     }
 
     /**
@@ -414,7 +439,7 @@ class KnownIssuesTest extends TestCase
     }
 
     /**
-     * RESTORE ... FROM SNAPSHOT, as documented, is a syntax error on 4.2.4.
+     * RESTORE ... FROM SNAPSHOT, as documented, is a syntax error on 4.2.4 to 4.2.6.
      * Driver workaround: none; read the snapshot with asOfSnapshot() and copy
      * the rows back (see docs/docs/analytics.md).
      */
