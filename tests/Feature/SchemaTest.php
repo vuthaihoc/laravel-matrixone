@@ -5,6 +5,7 @@ namespace MatrixOne\Tests\Feature;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use MatrixOne\MatrixOneConnection;
 use RuntimeException;
 
 class SchemaTest extends TestCase
@@ -235,6 +236,34 @@ class SchemaTest extends TestCase
         DB::statement('alter table sc_hnsw alter reindex sc_hnsw_embedding_vectorindex hnsw force_sync');
 
         $this->assertSame([1], DB::table('sc_hnsw')->nearestTo('embedding', [0.9, 0.1, 0], 1)->pluck('id')->all());
+    }
+
+    public function testVectorIndexSearchedWithAVectorFromASubquery(): void
+    {
+        Schema::create('sc_similar', function (Blueprint $table) {
+            $table->id();
+            $table->vector('embedding', 3);   // NOT NULL: required for the index path
+            $table->vectorIndex('embedding')->lists(2);
+        });
+
+        DB::table('sc_similar')->insert([
+            ['embedding' => '[1,0,0]'], ['embedding' => '[0,1,0]'], ['embedding' => '[0.9,0.2,0]'], ['embedding' => '[0,0,1]'],
+        ]);
+        DB::statement('alter table sc_similar alter reindex sc_similar_embedding_vectorindex ivfflat lists = 2');
+
+        $query = DB::table('sc_similar')->nearestTo('embedding', DB::table('sc_similar')->select('embedding')->where('id', 1), 2);
+
+        $this->assertSame([1, 3], $query->pluck('id')->all());
+
+        $connection = DB::connection();
+        assert($connection instanceof MatrixOneConnection);
+
+        if (version_compare((string) $connection->getMatrixOneVersion(), '4.2.6', '>=')) {
+            // 4.2.6+: the subquery is evaluated once and the IVF index searched with its vector.
+            $plan = implode("\n", array_map(fn ($row) => (string) array_values((array) $row)[0], DB::select('explain '.$query->toRawSql())));
+            $this->assertStringContainsString('Scalar Vector Query', $plan);
+            $this->assertStringContainsString('ivf_search', $plan);
+        }
     }
 
     public function testViews(): void

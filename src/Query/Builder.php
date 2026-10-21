@@ -2,12 +2,14 @@
 
 namespace MatrixOne\Query;
 
+use Closure;
 use DateTimeInterface;
 use DbPortable\Contracts\HistoricalReads;
 use DbPortable\Contracts\SearchBox;
 use DbPortable\Query\HistoricalReadMacros;
 use Illuminate\Contracts\Database\Query\Expression as ExpressionContract;
 use Illuminate\Contracts\Support\Arrayable;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Query\Builder as BaseBuilder;
 use Illuminate\Database\Query\Expression;
@@ -68,7 +70,7 @@ class Builder extends BaseBuilder implements HistoricalReads, SearchBox
      * (Laravel 12 hard-codes the pgvector operator here).
      *
      * @param  ExpressionContract|string  $column
-     * @param  Arrayable<int, mixed>|array<int, mixed>|string  $vector
+     * @param  Arrayable<int, mixed>|array<int, mixed>|string|Closure|BaseBuilder|EloquentBuilder<Model>  $vector
      * @param  string|null  $as
      * @return $this
      */
@@ -81,7 +83,7 @@ class Builder extends BaseBuilder implements HistoricalReads, SearchBox
      * {@inheritDoc}
      *
      * @param  ExpressionContract|string  $column
-     * @param  Arrayable<int, mixed>|array<int, mixed>|string  $vector
+     * @param  Arrayable<int, mixed>|array<int, mixed>|string|Closure|BaseBuilder|EloquentBuilder<Model>  $vector
      * @param  float  $maxDistance
      * @param  string  $boolean
      * @return $this
@@ -95,7 +97,7 @@ class Builder extends BaseBuilder implements HistoricalReads, SearchBox
      * {@inheritDoc}
      *
      * @param  ExpressionContract|string  $column
-     * @param  Arrayable<int, mixed>|array<int, mixed>|string  $vector
+     * @param  Arrayable<int, mixed>|array<int, mixed>|string|Closure|BaseBuilder|EloquentBuilder<Model>  $vector
      * @return $this
      */
     public function orderByVectorDistance($column, $vector)
@@ -106,12 +108,17 @@ class Builder extends BaseBuilder implements HistoricalReads, SearchBox
     /**
      * Resolve a vector argument the way Laravel does: a plain string is text
      * to embed, unless it already is a vector literal such as "[1,2,3]".
+     * Subqueries selecting a vector are kept.
      *
-     * @param  Arrayable<int, mixed>|array<int, mixed>|string  $vector
-     * @return Arrayable<int, mixed>|array<int, mixed>|string
+     * @param  Arrayable<int, mixed>|array<int, mixed>|string|Closure|BaseBuilder|EloquentBuilder<Model>  $vector
+     * @return Arrayable<int, mixed>|array<int, mixed>|string|Closure|BaseBuilder|EloquentBuilder<Model>
      */
-    protected function resolveVector(mixed $vector): Arrayable|array|string
+    protected function resolveVector(mixed $vector): Arrayable|array|string|Closure|BaseBuilder|EloquentBuilder
     {
+        if (static::isVectorSubquery($vector)) {
+            return $vector;
+        }
+
         if (is_string($vector) && ! str_starts_with(ltrim($vector), '[') && method_exists(Stringable::class, 'toEmbeddings')) {
             // Available from Laravel 13 (laravel/ai embeddings).
             // @phpstan-ignore method.notFound
@@ -119,7 +126,7 @@ class Builder extends BaseBuilder implements HistoricalReads, SearchBox
         }
 
         if (! is_string($vector) && ! is_array($vector) && ! $vector instanceof Arrayable) {
-            throw new InvalidArgumentException('The vector must be an array, an Arrayable or a string.');
+            throw new InvalidArgumentException('The vector must be an array, an Arrayable, a string or a subquery.');
         }
 
         return $vector;
@@ -152,14 +159,14 @@ class Builder extends BaseBuilder implements HistoricalReads, SearchBox
      * Inside MatrixOneConnection::withCompatibilityRewrites(), a subquery
      * selecting a single column with `limit 1` selects `max(column)` instead.
      *
-     * @param  \Closure|BaseBuilder|\Illuminate\Database\Eloquent\Builder<Model>|string  $query
+     * @param  Closure|BaseBuilder|EloquentBuilder<Model>|string  $query
      * @param  string  $as
      * @return $this
      */
     public function selectSub($query, $as)
     {
         if ($this->connection instanceof MatrixOneConnection && $this->connection->usesCompatibilityRewrites()) {
-            if ($query instanceof \Closure) {
+            if ($query instanceof Closure) {
                 $callback = $query;
                 $callback($query = $this->forSubQuery());
             }
@@ -384,34 +391,35 @@ class Builder extends BaseBuilder implements HistoricalReads, SearchBox
     /**
      * Add a vector distance to the select list.
      *
-     * @param  Arrayable<int, mixed>|array<int, mixed>|string  $vector
+     * @param  Arrayable<int, mixed>|array<int, mixed>|string|Closure|BaseBuilder|EloquentBuilder<Model>  $vector
      * @return $this
      */
     public function selectVectorDistanceUsing(
         string $metric,
         ExpressionContract|string $column,
-        Arrayable|array|string $vector,
+        Arrayable|array|string|Closure|BaseBuilder|EloquentBuilder $vector,
         ?string $as = null,
     ): static {
         $as ??= (is_string($column) ? $column : 'vector').'_distance';
 
-        $this->addBinding(Vector::toLiteral($vector), 'select');
+        [$sql, $bindings] = $this->vectorOperand($vector);
+        $this->addBinding($bindings, 'select');
 
         return $this->addSelect(new Expression(
-            $this->grammar->compileVectorDistance($column, $metric).' as '.$this->grammar->wrap($as)
+            $this->grammar->compileVectorDistance($column, $metric, $sql).' as '.$this->grammar->wrap($as)
         ));
     }
 
     /**
      * Add a vector distance "where" clause to the query.
      *
-     * @param  Arrayable<int, mixed>|array<int, mixed>|string  $vector
+     * @param  Arrayable<int, mixed>|array<int, mixed>|string|Closure|BaseBuilder|EloquentBuilder<Model>  $vector
      * @return $this
      */
     public function whereVectorDistanceUsing(
         string $metric,
         ExpressionContract|string $column,
-        Arrayable|array|string $vector,
+        Arrayable|array|string|Closure|BaseBuilder|EloquentBuilder $vector,
         string $operator,
         float|int $value,
         string $boolean = 'and',
@@ -420,9 +428,11 @@ class Builder extends BaseBuilder implements HistoricalReads, SearchBox
             throw new InvalidArgumentException("Invalid vector distance operator [{$operator}].");
         }
 
+        [$sql, $bindings] = $this->vectorOperand($vector);
+
         return $this->whereRaw(
-            $this->grammar->compileVectorDistance($column, $metric)." {$operator} ?",
-            [Vector::toLiteral($vector), $value],
+            $this->grammar->compileVectorDistance($column, $metric, $sql)." {$operator} ?",
+            [...$bindings, $value],
             $boolean,
         );
     }
@@ -430,13 +440,13 @@ class Builder extends BaseBuilder implements HistoricalReads, SearchBox
     /**
      * Order the query by the distance to the given vector (nearest first).
      *
-     * @param  Arrayable<int, mixed>|array<int, mixed>|string  $vector
+     * @param  Arrayable<int, mixed>|array<int, mixed>|string|Closure|BaseBuilder|EloquentBuilder<Model>  $vector
      * @return $this
      */
     public function orderByVectorDistanceUsing(
         string $metric,
         ExpressionContract|string $column,
-        Arrayable|array|string $vector,
+        Arrayable|array|string|Closure|BaseBuilder|EloquentBuilder $vector,
         string $direction = 'asc',
     ): static {
         $direction = strtolower($direction);
@@ -445,10 +455,11 @@ class Builder extends BaseBuilder implements HistoricalReads, SearchBox
             throw new InvalidArgumentException('Order direction must be "asc" or "desc".');
         }
 
-        $this->addBinding(Vector::toLiteral($vector), $this->unions ? 'unionOrder' : 'order');
+        [$sql, $bindings] = $this->vectorOperand($vector);
+        $this->addBinding($bindings, $this->unions ? 'unionOrder' : 'order');
 
         $this->{$this->unions ? 'unionOrders' : 'orders'}[] = [
-            'column' => new Expression($this->grammar->compileVectorDistance($column, $metric)),
+            'column' => new Expression($this->grammar->compileVectorDistance($column, $metric, $sql)),
             'direction' => $direction,
         ];
 
@@ -458,16 +469,42 @@ class Builder extends BaseBuilder implements HistoricalReads, SearchBox
     /**
      * Get the $limit rows nearest to the given vector.
      *
-     * @param  Arrayable<int, mixed>|array<int, mixed>|string  $vector
+     * @param  Arrayable<int, mixed>|array<int, mixed>|string|Closure|BaseBuilder|EloquentBuilder<Model>  $vector
      * @return $this
      */
     public function nearestTo(
         ExpressionContract|string $column,
-        Arrayable|array|string $vector,
+        Arrayable|array|string|Closure|BaseBuilder|EloquentBuilder $vector,
         int $limit = 10,
         string $metric = 'cosine',
     ): static {
         return $this->orderByVectorDistanceUsing($metric, $column, $vector)->limit($limit);
+    }
+
+    /**
+     * The SQL of a query vector and its bindings: a placeholder for a vector
+     * value, or a scalar subquery selecting the vector of another row.
+     *
+     * @param  Arrayable<int, mixed>|array<int, mixed>|string|Closure|BaseBuilder|EloquentBuilder<Model>  $vector
+     * @return array{0: string, 1: array<int, mixed>}
+     */
+    protected function vectorOperand(Arrayable|array|string|Closure|BaseBuilder|EloquentBuilder $vector): array
+    {
+        if (static::isVectorSubquery($vector)) {
+            [$sql, $bindings] = $this->createSub($vector);
+
+            return ['('.$sql.')', $bindings];
+        }
+
+        return ['?', [Vector::toLiteral($vector)]];
+    }
+
+    /**
+     * @phpstan-assert-if-true Closure|BaseBuilder|EloquentBuilder<Model> $vector
+     */
+    protected static function isVectorSubquery(mixed $vector): bool
+    {
+        return $vector instanceof Closure || $vector instanceof BaseBuilder || $vector instanceof EloquentBuilder;
     }
 
     /**

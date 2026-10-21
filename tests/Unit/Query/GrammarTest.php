@@ -262,6 +262,25 @@ class GrammarTest extends TestCase
         $this->assertSame(['[1,2.5]', '[1,2.5]', 0.3, '[1,2.5]'], $query->getBindings());
     }
 
+    public function testVectorHelpersAcceptASubquery(): void
+    {
+        $source = fn ($query) => $query->from('docs')->select('embedding')->where('id', 42);
+
+        $query = $this->query()->from('docs')
+            ->select('id')
+            ->selectVectorDistanceUsing('l2', 'embedding', $source, 'distance')
+            ->whereVectorDistanceUsing('cosine', 'embedding', $this->query()->from('docs')->select('embedding')->where('id', 43), '<=', 0.3)
+            ->nearestTo('embedding', $source, 5);
+
+        $this->assertSame(
+            'select `id`, l2_distance(`embedding`, (select `embedding` from `docs` where `id` = ?)) as `distance` from `docs` '
+            .'where cosine_distance(`embedding`, (select `embedding` from `docs` where `id` = ?)) <= ? '
+            .'order by cosine_distance(`embedding`, (select `embedding` from `docs` where `id` = ?)) asc limit 5',
+            $query->toSql()
+        );
+        $this->assertSame([42, 43, 0.3, 42], $query->getBindings());
+    }
+
     public function testUnknownVectorMetricThrows(): void
     {
         $this->expectException(InvalidArgumentException::class);
