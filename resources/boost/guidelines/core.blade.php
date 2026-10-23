@@ -1,7 +1,7 @@
 ## MatrixOne (vuthaihoc/laravel-matrixone)
 
 - This application uses MatrixOne through the `matrixone` database driver. MatrixOne speaks the MySQL protocol but is not MySQL; write standard Laravel code and follow these rules. Activate the `matrixone-development` skill before designing schemas or writing non-trivial queries for a `matrixone` connection.
-- Never put a FULLTEXT index on a table that has its own foreign key: inserts crash MatrixOne 4.2.4. Keep searchable text in a table without foreign keys, or drop the constraint.
+- Never put a FULLTEXT index on a table that has its own foreign key: inserts crash MatrixOne 4.2 (up to 4.2.6 at least). Keep searchable text in a table without foreign keys, or drop the constraint.
 - String `=` comparisons and unique indexes are case-sensitive even on `_ci` collations. Store e-mails and usernames with the `MatrixOne\Eloquent\Casts\Lowercase` cast and lower-case user input before querying or calling `Auth::attempt()`; use `whereIgnoreCase()` only when the data cannot be normalized.
 - JSON columns cannot have default values or indexes. Set JSON defaults in the model (`$attributes`) and index a separate scalar column instead.
 - There is no ROLLBACK TO SAVEPOINT: a nested `DB::transaction()` does not roll back on its own; only the outermost transaction really rolls back. Do not catch an inner transaction's exception and keep going; with `'nested_transactions' => 'rollback_only'` the outer commit then throws.

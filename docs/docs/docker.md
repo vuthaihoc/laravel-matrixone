@@ -16,7 +16,7 @@ All MatrixOne services run in one container and store data on the host. This is 
 ```yaml
 services:
   matrixone:
-    image: matrixorigin/matrixone:4.2.4
+    image: matrixorigin/matrixone:4.2.6
     container_name: matrixone
     hostname: matrixone
     ports:
@@ -41,14 +41,14 @@ MatrixOne's log service stores its data under `mo-data/logservice-data/<uuid>/<h
 Without persistence, a single command is enough:
 
 ```bash
-docker run -d -p 6001:6001 --name matrixone matrixorigin/matrixone:4.2.4
+docker run -d -p 6001:6001 --name matrixone matrixorigin/matrixone:4.2.6
 ```
 
 With persistence, pass both the volume and the hostname:
 
 ```bash
 docker run -d -p 6001:6001 --name matrixone --hostname matrixone \
-  -v "$PWD/mo-data:/mo-data" matrixorigin/matrixone:4.2.4
+  -v "$PWD/mo-data:/mo-data" matrixorigin/matrixone:4.2.6
 ```
 
 ## Standalone with S3 storage
@@ -72,7 +72,7 @@ docker/s3/
 ```yaml
 services:
   matrixone:
-    image: matrixorigin/matrixone:4.2.4
+    image: matrixorigin/matrixone:4.2.6
     container_name: matrixone-s3
     hostname: matrixone
     entrypoint: [/mo-service, -debug-http=:12345, -launch, /mo_confs/launch.toml]
@@ -220,7 +220,7 @@ The CN runs in its own container, off by default through a compose profile:
 
 ```yaml
   cn2:
-    image: matrixorigin/matrixone:4.2.4
+    image: matrixorigin/matrixone:4.2.6
     container_name: matrixone-cn2
     profiles: [scale]
     depends_on: [matrixone]

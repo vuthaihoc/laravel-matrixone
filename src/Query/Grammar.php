@@ -449,16 +449,17 @@ class Grammar extends MySqlGrammar
     }
 
     /**
-     * Compile a vector distance expression using the given metric.
+     * Compile a vector distance expression using the given metric, against
+     * a placeholder or the SQL of a subquery selecting the vector.
      */
-    public function compileVectorDistance(mixed $column, string $metric): string
+    public function compileVectorDistance(mixed $column, string $metric, string $vector = '?'): string
     {
         $function = $this->vectorDistanceFunctions[$metric] ?? throw new InvalidArgumentException(
             "Unsupported vector distance metric [{$metric}]. Supported: ".implode(', ', array_keys($this->vectorDistanceFunctions)).'.'
         );
 
         // @phpstan-ignore argument.type
-        return "{$function}({$this->wrap($column)}, ?)";
+        return "{$function}({$this->wrap($column)}, {$vector})";
     }
 
     /**

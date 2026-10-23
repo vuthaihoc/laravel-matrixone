@@ -80,7 +80,7 @@ User::whereNotInIgnoreCase('status', ['Banned'])->get();
 
 ## JSON columns
 
-Every JSON method of Laravel's MySQL grammar works, verified against MatrixOne 4.2.4:
+Every JSON method of Laravel's MySQL grammar works, verified against MatrixOne 4.2.4 and 4.2.6:
 
 | Method | Notes |
 |--------|-------|
@@ -138,3 +138,23 @@ Post::query()
 ```
 
 Vectors can be arrays, `Collection`s or MatrixOne literals such as `'[0.1,0.2]'`.
+
+### Similar rows: the vector of another row
+
+Every vector argument also takes a subquery selecting one vector (a query builder, an Eloquent builder or a closure), so "more like this" needs no round trip to load the source embedding into PHP:
+
+```php
+$source = Post::select('embedding')->whereKey($post->id);
+
+// The 5 posts nearest to $post; the source row is the nearest, drop it in PHP.
+Post::nearestTo('embedding', $source, 6)->get()->except($post->id);
+```
+
+On MatrixOne 4.2.6+, the subquery is evaluated once and the vector index is searched with its vector (the plan shows `Scalar Vector Query` and `ivf_search`) when:
+
+- the vector column is `NOT NULL` (Laravel's `vector()` column is, unless `->nullable()`);
+- the subquery selects at most one row by primary or unique key equality;
+- the query orders by the distance with a limit (`nearestTo()`, `orderByVectorDistanceUsing()`), without also selecting the distance;
+- the metric matches the index (`cosine` for the default `vector_cosine_ops`).
+
+Other shapes scan the table, as earlier versions do. **Do not filter on the primary key** (`whereKeyNot($post->id)`, `where('id', '>', ...)`) in the same query: MatrixOne 4.2.6 panics on larger tables and returns too few rows on small ones ([Compatibility](./compatibility#known-matrixone-issues)). Fetch one more row and drop the source row, as above. Filters on other columns are fine.

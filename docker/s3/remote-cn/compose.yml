@@ -8,7 +8,7 @@ services:
   cn3:
     # Every CN must run the same MatrixOne version as the main server. The CPU
     # must support x86-64-v3 (AVX2, Intel Haswell / AMD Excavator or newer).
-    image: matrixorigin/matrixone:${MATRIXONE_TAG:-4.2.4}
+    image: matrixorigin/matrixone:${MATRIXONE_TAG:-4.2.6}
     container_name: matrixone-cn3
     # The main server advertises its services as "matrixone" and "cn2".
     extra_hosts:

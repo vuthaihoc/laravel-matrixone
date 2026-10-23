@@ -70,7 +70,7 @@ Article::search('songs')->hybrid()->get();                                  // r
 - `where`, `whereIn`, `whereNotIn` and `orderBy` only accept attributes listed as `filterable` or `sortable`; others throw an `InvalidArgumentException`, like Meilisearch's filterable attributes.
 - Scout's `import`, `flush`, `scout:index`, `scout:delete-index`, `withTrashed()`/`onlyTrashed()`, `query()` callbacks and `keys()` work as with other engines.
 - Embeddings come from `toSearchableEmbedding()`: an array is stored as is, a string is embedded with the [Laravel AI SDK](https://github.com/laravel/ai). Search terms are embedded the same way.
-- Index tables have no foreign keys, so FULLTEXT inserts are safe on MatrixOne 4.2.4.
+- Index tables have no foreign keys, so FULLTEXT inserts are safe on MatrixOne 4.2.
 
 ## Laravel Pulse
 

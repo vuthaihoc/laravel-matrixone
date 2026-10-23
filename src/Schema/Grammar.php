@@ -110,23 +110,14 @@ class Grammar extends MySqlGrammar
      * {@inheritDoc}
      *
      * MatrixOne leaves information_schema.key_column_usage empty for foreign
-     * keys, so they are read from mo_catalog.mo_foreign_keys instead.
+     * keys and denies it to ordinary users, as it does mo_catalog.mo_foreign_keys.
+     * SHOW CREATE TABLE only needs a privilege on the table itself and lists
+     * every foreign key with its columns in order, so the schema builder parses
+     * its output (see MatrixOneProcessor::processCreateTableForeignKeys()).
      */
     public function compileForeignKeys($schema, $table)
     {
-        return sprintf(
-            'select constraint_name as `name`, '
-            .'group_concat(column_name order by column_id) as `columns`, '
-            .'refer_db_name as `foreign_schema`, '
-            .'refer_table_name as `foreign_table`, '
-            .'group_concat(refer_column_name order by refer_column_id) as `foreign_columns`, '
-            .'on_update as `on_update`, '
-            .'on_delete as `on_delete` '
-            .'from mo_catalog.mo_foreign_keys where db_name = %s and table_name = %s '
-            .'group by constraint_name, refer_db_name, refer_table_name, on_update, on_delete',
-            $schema ? $this->quoteString($schema) : 'schema()',
-            $this->quoteString($table)
-        );
+        return 'show create table '.($schema ? $this->wrapValue($schema).'.' : '').$this->wrapValue($table);
     }
 
     /**

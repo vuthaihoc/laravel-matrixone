@@ -40,6 +40,23 @@ Add a connection to `config/database.php`:
 
 Set `DB_CONNECTION=matrixone` to make it the default connection. See [Installation](docs/docs/installation.md) for every option.
 
+### Application users without admin rights
+
+The driver works with an ordinary MatrixOne user that owns one database through a role:
+
+```sql
+create database `app_db`;
+create role app_rw;
+grant all on database `app_db` to app_rw;
+grant all on table `app_db`.* to app_rw;
+create user app identified by '...' default role app_rw;
+```
+
+MatrixOne denies such a user two things Laravel's MySQL driver relies on, so the driver avoids them:
+
+- **`use app_db`** fails with "do not have privilege to execute the statement", even when the role owns the database. Laravel's MySQL connector runs it after every connect (`use_db_after_connecting`), and because PDO connects lazily the error shows up on the application's first query, typically the `information_schema.tables` lookup of `migrate`. The DSN already selects the database, so the `matrixone` driver no longer runs `use` unless `'use_db_after_connecting' => true` is set. Applications that added `'use_db_after_connecting' => false` as a workaround can remove it.
+- **System catalogs**: `mo_catalog.mo_foreign_keys` and `information_schema.key_column_usage` are off limits, which broke `Schema::getForeignKeys()` (and tools built on it, such as `db-portable:copy`). Foreign keys are now read from `SHOW CREATE TABLE`, which only needs a privilege on the table itself. This was chosen over granting `select on mo_catalog.mo_foreign_keys` (which exposes the foreign key metadata of every database in the account) and over catching the error (which would silently hide foreign keys). `SHOW CREATE TABLE` also keeps the column order of composite keys and reports `set null` / `no action` the way Laravel expects; on MatrixOne 4.2.6 its output matched the catalog for every table checked.
+
 ## Running MatrixOne
 
 Ready-to-use Docker setups live in [`docker/`](docker):
@@ -122,7 +139,7 @@ See [AI Assistants](docs/docs/boost.md) for installation, updates, customization
 ## Testing
 
 ```bash
-(cd docker/standalone && docker compose up -d)   # MatrixOne 4.2.4 on 127.0.0.1:6001 (root / 111)
+(cd docker/standalone && docker compose up -d)   # MatrixOne 4.2.6 on 127.0.0.1:6001 (root / 111)
 composer test               # the database driver (Unit + Feature)
 composer test:monitoring    # statement history and slow queries (slow, separate suite)
 ```
