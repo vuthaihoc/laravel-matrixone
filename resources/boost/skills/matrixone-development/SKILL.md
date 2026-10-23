@@ -265,4 +265,5 @@ After a server panic the driver drops the broken connection (and forgets its tra
 
 1. Read the SQL in the `QueryException`; MatrixOne errors mentioning `not supported` or `panic` are server limitations, not Laravel bugs.
 2. Check the package docs page `compatibility.md` in `vendor/vuthaihoc/laravel-matrixone/docs/docs/` for the list of handled differences.
-3. The package's `tests/KnownIssues` suite (`composer test:known-issues`) reproduces every open server issue in plain SQL; run it against a new MatrixOne release to see what got fixed.
+3. `do not have privilege to execute the statement` on the very first query of an ordinary (non-root) user: the connection config sets `'use_db_after_connecting' => true` (MatrixOne denies `use <db>` to such users; the driver's default is `false`), or the code reads `mo_catalog` / `information_schema.key_column_usage` directly. Use `Schema::getForeignKeys()` instead of catalog queries; do not grant catalog access.
+4. The package's `tests/KnownIssues` suite (`composer test:known-issues`) reproduces every open server issue in plain SQL; run it against a new MatrixOne release to see what got fixed.

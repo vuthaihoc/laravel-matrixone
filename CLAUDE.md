@@ -23,7 +23,7 @@ Local runs may use a gitignored `phpunit.xml` (copied from `phpunit.xml.dist`) t
 
 - `src/MatrixOneServiceProvider.php` — binds `db.connector.matrixone` and `Connection::resolverFor('matrixone')`, so Laravel's ConnectionFactory builds the connection like a built-in driver.
 - `src/MatrixOneConnection.php` — extends `MySqlConnection`: grammars, processor, unique-violation detection, `getMatrixOneVersion()`, and dropping connections broken by a server panic (`handleQueryException`).
-- `src/Connectors/MatrixOneConnector.php` — extends `MySqlConnector`; emulated prepares on by default (`emulate_prepares` option); applies the `variables` option with `SET SESSION`.
+- `src/Connectors/MatrixOneConnector.php` — extends `MySqlConnector`; emulated prepares on by default (`emulate_prepares` option); applies the `variables` option with `SET SESSION`; skips `use <db>` after connecting unless `use_db_after_connecting` is true.
 - Snapshots and PITR: `MatrixOneConnection::createSnapshot()`, `createPitr()`, … and the `matrixone:snapshot` / `matrixone:pitr` commands (`src/Console/`).
 - Storage: `flushTable()`, `flushTables()`, `checkpoint()` (`mo_ctl`, admin user) and the `matrixone:flush` command.
 - Monitoring: `MatrixOneConnection::statementLog()` (`src/Monitoring/StatementLogQuery.php`, a builder on `system.statement_info` with replaceable default filters), `getStatementPlan()` (`ExecutionPlan`), `tableStats()` and the `matrixone:slow-queries` command.
@@ -31,7 +31,7 @@ Local runs may use a gitignored `phpunit.xml` (copied from `phpunit.xml.dist`) t
 - `src/Query/Grammar.php` — MySQL grammar overrides (exists, upsert, locks, RAND, savepoints off, JSON, DELETE safeguard, vector distance).
 - `src/Query/Builder.php` — analytics (`timeWindow`, `sample`, `samplePercent`, `asOfSnapshot`, `asOfTimestamp`, compiled by the grammar's `compileTimeWindow`/`compileColumns`/`compileFrom`), truncate fallback, full-text relevance helpers (`searchFullText`, `selectFullTextRelevance`, `orderByFullTextRelevance`), suggestions (`whereStartsWith`, `whereContains`, `suggest`; no fuzzy search on MatrixOne), vector helpers (`nearestTo`, `*VectorDistanceUsing`; vectors may be subqueries) and overrides of Laravel's vector methods.
 - `src/Query/Processors/MatrixOneProcessor.php` — normalizes column/index metadata.
-- `src/Schema/Grammar.php`, `Builder.php` — DDL and introspection overrides, vector columns and indexes. Blueprint additions (`vector64`, and `vectorIndex`/`dropVectorIndex` on Laravel versions lacking them) are macros registered in `MatrixOneServiceProvider::registerBlueprintMacros()`; do not reintroduce a Blueprint subclass.
+- `src/Schema/Grammar.php`, `Builder.php` — DDL and introspection overrides (foreign keys parsed from `SHOW CREATE TABLE` by `MatrixOneProcessor::processCreateTableForeignKeys()`), vector columns and indexes. Blueprint additions (`vector64`, and `vectorIndex`/`dropVectorIndex` on Laravel versions lacking them) are macros registered in `MatrixOneServiceProvider::registerBlueprintMacros()`; do not reintroduce a Blueprint subclass.
 - `src/Eloquent/Casts/AsVector.php`, `src/Support/Vector.php` — vector literal conversion.
 
 `resources/boost/` holds the Laravel Boost guideline and the `matrixone-development` skill shipped to applications; update them together with `docs/docs/compatibility.md` whenever a pitfall or workaround changes.
@@ -51,6 +51,7 @@ Local runs may use a gitignored `phpunit.xml` (copied from `phpunit.xml.dist`) t
 - `on duplicate key update` may not assign the primary key: `compileUpsert()` drops `uniqueBy` columns from the update list (the database cache store depends on it).
 - No `skip locked` / `nowait`: `compileLock()` strips them (the database queue uses `FOR UPDATE SKIP LOCKED`).
 - `LIKE` and `=` ignore `_ci` collations; the grammar maps `like` to `ilike`, `=` stays case-sensitive.
+- Ordinary users (a role with `all` on one database) are denied `use <db>`, `mo_catalog` and `information_schema.key_column_usage`: the connector defaults `use_db_after_connecting` to false and `getForeignKeys()` parses `SHOW CREATE TABLE`. Never introduce a catalog query on a path applications use (`tests/Feature/OrdinaryUserTest.php`).
 - JSON columns accept neither defaults nor indexes; the grammar throws unless `ignore_json_defaults` / `ignore_json_indexes` is set.
 
 ## Code Comments Language

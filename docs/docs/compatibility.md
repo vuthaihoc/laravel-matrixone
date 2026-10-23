@@ -35,7 +35,8 @@ MatrixOne speaks the MySQL 8.0 protocol but implements a subset of MySQL. This p
 | No `RENAME INDEX` | Drop and re-create |
 | `USING BTREE` rejected | Index algorithm omitted |
 | Several tables cannot be dropped in one statement | `db:wipe` drops one table at a time |
-| `information_schema.key_column_usage` is empty for FKs | Foreign keys read from `mo_catalog.mo_foreign_keys` |
+| `information_schema.key_column_usage` is empty for FKs; it and `mo_catalog` are denied to ordinary users | Foreign keys read from `SHOW CREATE TABLE` |
+| `use <database>` denied to ordinary users, even on their own database | Not run after connecting (`use_db_after_connecting` defaults to `false`); the DSN selects the database |
 | Hidden `__mo_*` columns and system databases | Excluded from introspection |
 | Placeholders rejected in `MATCH ... AGAINST` with native prepares | Emulated prepares are the default |
 | Native `UUID` column type unreadable by mysqlnd | `uuid()` stays `char(36)` |
@@ -75,5 +76,6 @@ composer test:known-issues
 - **`RESTORE ... FROM SNAPSHOT` is a syntax error** on 4.2.4 to 4.2.6. Copy the rows back with `insertUsing()` and `asOfSnapshot()` ([Analytics › Restoring data](./analytics#restoring-data)).
 - **4.2.6: a subquery vector plus a primary-key filter breaks the vector index search.** `nearestTo('embedding', Post::select('embedding')->whereKey($id), 5)` combined with `whereKeyNot($id)` (or `id > ...`, `id not in (...)`) panics on tables of a few thousand rows (`Error reading result set's header`) and returns fewer rows than the limit on smaller ones. Fetch one more row and drop the source row in PHP ([Query Builder › Similar rows](./query-builder#similar-rows-the-vector-of-another-row)).
 - **A `DESC` key after a boolean `ORDER BY` key is ignored**: `order by score is null, score desc` returns rows in insertion order. To sort NULLs last, `order by score desc` already puts them last on MatrixOne; for ascending order `order by score is null, score asc` works. Wrapping the descending key in `coalesce()` also avoids the bug: `order by has_sync desc, coalesce(ratio, 0) desc`.
+- **`information_schema.referential_constraints` is not filtered by privileges**: an ordinary user sees the foreign key names and table names of every database in the account (but not the columns). The driver does not read it.
 - **FULLTEXT2** indexes (4.2.2+) are experimental and are not indexed synchronously; the driver does not use them.
 - **HNSW** vector indexes are experimental: they need a signed `BIGINT` primary key and are maintained asynchronously (sync with `alter reindex ... hnsw force_sync`). `vectorIndex()` builds IVF-Flat unless `->hnsw()` is called.

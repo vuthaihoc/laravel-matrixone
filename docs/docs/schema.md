@@ -126,5 +126,5 @@ Adding, changing (`->change()`), renaming and dropping columns, table comments a
 
 - MatrixOne's system databases (`mo_catalog`, `mo_task`, `system`...) are excluded.
 - Hidden columns (`__mo_fake_pk_col` for tables without a primary key) are excluded.
-- Foreign keys are read from `mo_catalog.mo_foreign_keys`, because `information_schema.key_column_usage` is empty in MatrixOne.
+- Foreign keys are read from `SHOW CREATE TABLE`: `information_schema.key_column_usage` is empty for foreign keys in MatrixOne, and it and `mo_catalog.mo_foreign_keys` are denied to ordinary users. No catalog grant is needed, a missing table or a view returns `[]`, and `on_update` / `on_delete` use Laravel's values (`cascade`, `set null`, `restrict`, `no action`).
 - Table `size` is always `0`.

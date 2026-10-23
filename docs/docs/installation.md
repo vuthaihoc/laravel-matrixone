@@ -75,7 +75,27 @@ The driver accepts every option of Laravel's `mysql` driver (`read` / `write` ho
 | `retry_attempts` | `3` | Runs of a `DB::transaction()` callback (without an explicit attempt count), or of a statement outside a transaction, after a write conflict or deadlock. `1` disables the retries. See [Eloquent › Conflicts and deadlocks](./eloquent#conflicts-and-deadlocks). |
 | `retry_base_delay` / `retry_max_delay` | `50` / `1000` | Backoff before a retry in milliseconds: doubled on every retry up to the maximum, with jitter. |
 | `ignore_json_indexes` | `false` | MatrixOne cannot index JSON columns. By default an `index()` / `unique()` on a JSON column fails with a clear error. Set to `true` to skip those indexes. Useful when running migrations written for PostgreSQL (`->algorithm('GIN')`). |
+| `use_db_after_connecting` | `false` | Laravel's MySQL connector runs `use <database>` after connecting. MatrixOne refuses it to ordinary users even when their role owns the database, and the DSN already selects the database, so the driver skips it. Set to `true` to run it anyway. See [Application users](#application-users). |
 | `emulate_prepares` | `true` | Use PDO emulated prepares. MatrixOne rejects placeholders in some positions (for example inside `MATCH ... AGAINST`) and its server-side prepared statements have known metadata caching issues. Set to `false` to use native prepares. An explicit `PDO::ATTR_EMULATE_PREPARES` in `options` takes precedence. |
+
+## Application users
+
+Applications do not need the `root` account. An ordinary user that owns one database through a role is enough to migrate, query and introspect it:
+
+```sql
+create database `app_db`;
+create role app_rw;
+grant all on database `app_db` to app_rw;
+grant all on table `app_db`.* to app_rw;
+create user app identified by '...' default role app_rw;
+```
+
+MatrixOne denies such a user some statements MySQL allows, and the driver works around them:
+
+- `use app_db` fails with "do not have privilege to execute the statement". Laravel's MySQL connector would run it after every connect, and since PDO connects lazily the error would appear on the first query (often the `information_schema.tables` lookup of `migrate`). The driver relies on the database in the DSN instead (`use_db_after_connecting` defaults to `false`).
+- `mo_catalog` and `information_schema.key_column_usage` cannot be read. `Schema::getForeignKeys()` parses `SHOW CREATE TABLE`, which only needs a privilege on the table, so no catalog grant is required.
+
+Flushing tables and checkpoints still need the system account (see [Storage](./storage)).
 
 ## Running MatrixOne locally
 
