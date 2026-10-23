@@ -71,6 +71,7 @@ Foreign keys (`foreignId()->constrained()`, `cascadeOnDelete()`, `dropForeign()`
 $table->fullText('body');
 $table->fullText(['title', 'body'])->parser('ngram');
 $table->fullText('meta')->parser('json');   // JSON columns
+$table->fullText2('body');                  // FULLTEXT2: faster, asynchronous, allowed next to foreign keys
 ```
 
 See [Full-text Search](./full-text) for parsers, relevance, session variables, FULLTEXT2 and the MatrixOne 4.2 foreign-key crash.

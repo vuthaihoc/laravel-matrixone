@@ -170,32 +170,52 @@ Variable names are validated (letters, digits and underscores) and values are qu
 
 ## FULLTEXT2 (experimental)
 
-MatrixOne 4.2.2+ has a second full-text engine, `FULLTEXT2`. It is behind a session flag, and its index is maintained asynchronously: new rows may not be searchable immediately. There is no Blueprint method for it; create it with raw SQL inside `withSessionVariables()`:
+MatrixOne 4.2.2+ has a second full-text engine, `FULLTEXT2`, created with the driver's `fullText2()` Blueprint macro. The driver enables the `experimental_fulltext2_index` session flag for the statement.
 
 ```php
-use MatrixOne\MatrixOneConnection;
+Schema::create('comments', function (Blueprint $table) {
+    $table->id();
+    $table->foreignId('post_id')->constrained();   // fine with FULLTEXT2
+    $table->text('body');
+    $table->fullText2('body');                     // comments_body_fulltext2, ngram parser
+    // $table->fullText2('meta')->parser('json');  // JSON columns
+});
 
-public function up(): void
-{
-    DB::connection('matrixone')->withSessionVariables(
-        ['experimental_fulltext2_index' => 1],
-        fn (MatrixOneConnection $db) => $db->statement('create fulltext2 index articles_body_ft2 on articles (body)'),
-    );
-}
-
-public function down(): void
-{
-    Schema::connection('matrixone')->table('articles', fn ($table) => $table->dropIndex('articles_body_ft2'));
-}
+Schema::table('comments', fn (Blueprint $table) => $table->dropFullText2(['body']));
 ```
 
-Force the index to catch up, for example after a bulk import:
+Queries are the same as with `FULLTEXT` (`whereFullText()`, `searchFullText()`, the relevance helpers, `FullTextQuery`). Use boolean queries (`FullTextQuery::anyOf()`, `['mode' => 'boolean']`); scoring follows `ft2_relevancy_algorithm` (BM25 by default).
+
+### FULLTEXT or FULLTEXT2?
+
+Measured on MatrixOne 4.2.6 with 20,000 documents of 80 words, written in batches of 500 upserts as the Scout engines do:
+
+| | `FULLTEXT` | `FULLTEXT2` |
+|---|---|---|
+| Insert 20,000 rows | 21.3 s | 5.7 s |
+| Upsert 500 existing rows | 1.05 s | 0.36 s |
+| Search + count | 205 ms | 46 ms |
+| New and changed rows searchable | immediately | **after about 10 s** (not even inside the writing transaction) |
+| Deleted rows and replaced words | gone immediately | gone immediately |
+| Table with its own foreign key | **inserts panic** (4.2.4 to 4.2.6) | works |
+| `LAST_INSERT_ID()` | wrong | correct |
+| Parsers | default, `ngram`, `json` | `ngram` (default), `json` |
+| Memory | aborted searches ("the Go heap is over the budget") on a 3 GB server near its limit | kept answering on the same server |
+
+Both returned exactly the expected matches. Choose `FULLTEXT2` for tables with foreign keys, large or write-heavy indexes and small servers, when a delay before new rows are found is acceptable. Keep `FULLTEXT`, the default, when code reads its own writes through search (save, then search), as in most tests.
+
+Force the indexes of a table to catch up, for example after a bulk import or in tests. Each sync takes a few seconds however little changed, so do not call it after every write:
 
 ```php
-DB::connection('matrixone')->statement('alter table articles alter reindex articles_body_ft2 fulltext2 force_sync');
+DB::connection('matrixone')->syncFullText2('comments');                         // every FULLTEXT2 index of the table
+DB::connection('matrixone')->syncFullText2('comments', 'comments_body_fulltext2'); // one index
 ```
 
-Queries use the same `whereFullText()` / relevance helpers. Prefer the classic `FULLTEXT` index unless you need FULLTEXT2's features.
+Limitations:
+
+- The `ngram` parser keeps English words whole, but splits words at accented characters: `Ti` matches `Tiếng`. For Vietnamese, search a column folded with `TextNormalizer::foldAccents()` (the `matrixone-index` Scout engine's `fold_accents` option does this).
+- Two `FULLTEXT2` indexes cannot share a column ("fulltext2 index are not allowed to use the same column"); a `FULLTEXT` and a `FULLTEXT2` index can.
+- Like `FULLTEXT`, it needs a primary key.
 
 ## Laravel Scout
 
@@ -245,7 +265,7 @@ Article::search('how to store songs')->semantic()->get(); // cosine similarity
 Article::search('songs')->hybrid()->get();                // rank fusion of both
 ```
 
-The table needs a `vector('embedding', <dimensions>)` column (or the column named by `searchableEmbeddingColumn()`) and, for full-text columns, a FULLTEXT index; keep that table free of foreign keys (MatrixOne 4.2.4 to 4.2.6). Embeddings of search terms are generated with the [Laravel AI SDK](https://github.com/laravel/ai) (`laravel/ai`).
+The table needs a `vector('embedding', <dimensions>)` column (or the column named by `searchableEmbeddingColumn()`) and, for full-text columns, a FULLTEXT index; keep that table free of foreign keys (MatrixOne 4.2.4 to 4.2.6), or create a `fullText2()` index instead (searchable after a delay, see [FULLTEXT2](#fulltext2-experimental)). Embeddings of search terms are generated with the [Laravel AI SDK](https://github.com/laravel/ai) (`laravel/ai`).
 
 To keep your models in another database and use MatrixOne only as the search index (like Meilisearch), use the `matrixone-index` engine: see [Integrations › MatrixOne as a separate search index](./integrations#matrixone-as-a-separate-search-index).
 
@@ -289,7 +309,7 @@ MatrixOne has **no fuzzy (typo-tolerant) search**: no trigram similarity (`pg_tr
 
 ## Limitations
 
-- **MatrixOne 4.2.4 to 4.2.6 crash:** inserting into a table that has both its own foreign key and a FULLTEXT index panics in the query planner. Keep full-text indexes on tables without foreign keys (being *referenced* by a foreign key is fine).
+- **MatrixOne 4.2.4 to 4.2.6 crash:** inserting into a table that has both its own foreign key and a FULLTEXT index panics in the query planner. Keep full-text indexes on tables without foreign keys (being *referenced* by a foreign key is fine), or use a [FULLTEXT2](#fulltext2-experimental) index, which does not crash.
 - **`LAST_INSERT_ID()` is wrong on FULLTEXT tables.** The driver already reads generated keys with `insert ... returning`; avoid `select last_insert_id()` in raw SQL.
 - Query expansion is not supported.
 - `MATCH ... AGAINST` cannot be combined with other conditions by `OR` (`->orWhereFullText()` next to other `where`s). Select the matches with a subquery instead: `->orWhereIn('id', DB::table('articles')->select('id')->whereFullText('body', $term))`.

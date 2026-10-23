@@ -42,6 +42,7 @@ SCOUT_DRIVER=matrixone-index
             'prefix' => true,                         // "learn" matches "learning"
             'mode' => 'natural',                      // 'boolean' passes user operators through
             'embedding' => 1536,                      // enables ->semantic() and ->hybrid()
+            'index' => 'fulltext2',                   // optional: faster, but asynchronous (default 'fulltext')
         ],
     ],
 ],
@@ -52,7 +53,7 @@ Models only need Scout's `Searchable` trait. The index table is created on the f
 | Column | Content |
 |--------|---------|
 | `scout_key` | the model's Scout key (primary key) |
-| `content` | the `fulltext` attributes joined, with a FULLTEXT index |
+| `content` | the `fulltext` attributes joined, with a FULLTEXT (or FULLTEXT2) index |
 | `document` | the whole searchable array as JSON |
 | `attr_<name>` | each filterable/sortable attribute, typed (`string`, `integer`, `float`, `boolean`, `datetime`) and indexed |
 | `attr___soft_deleted` | Scout's soft delete flag (`scout.soft_delete`) |
@@ -71,6 +72,14 @@ Article::search('songs')->hybrid()->get();                                  // r
 - Scout's `import`, `flush`, `scout:index`, `scout:delete-index`, `withTrashed()`/`onlyTrashed()`, `query()` callbacks and `keys()` work as with other engines.
 - Embeddings come from `toSearchableEmbedding()`: an array is stored as is, a string is embedded with the [Laravel AI SDK](https://github.com/laravel/ai). Search terms are embedded the same way.
 - Index tables have no foreign keys, so FULLTEXT inserts are safe on MatrixOne 4.2.
+- `'index' => 'fulltext2'` builds a [FULLTEXT2](./full-text#fulltext2-experimental) index: about 3 to 4 times faster to write and search, but new and changed documents become searchable after about ten seconds, like Meilisearch or Algolia. It only accepts the `ngram` (default) and `json` parsers; keep `fold_accents` on for Vietnamese. Changing the setting needs a new index table (`scout:delete-index` then `scout:import`).
+- After a bulk import, or in tests, bring a FULLTEXT2 index up to date (a few seconds; nothing happens for FULLTEXT indexes):
+
+```php
+use Laravel\Scout\EngineManager;
+
+app(EngineManager::class)->engine('matrixone-index')->syncIndex(App\Models\Article::class);
+```
 
 ## Laravel Pulse
 

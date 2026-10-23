@@ -31,7 +31,7 @@ Local runs may use a gitignored `phpunit.xml` (copied from `phpunit.xml.dist`) t
 - `src/Query/Grammar.php` — MySQL grammar overrides (exists, upsert, locks, RAND, savepoints off, JSON, DELETE safeguard, vector distance).
 - `src/Query/Builder.php` — analytics (`timeWindow`, `sample`, `samplePercent`, `asOfSnapshot`, `asOfTimestamp`, compiled by the grammar's `compileTimeWindow`/`compileColumns`/`compileFrom`), truncate fallback, full-text relevance helpers (`searchFullText`, `selectFullTextRelevance`, `orderByFullTextRelevance`), suggestions (`whereStartsWith`, `whereContains`, `suggest`; no fuzzy search on MatrixOne), vector helpers (`nearestTo`, `*VectorDistanceUsing`; vectors may be subqueries) and overrides of Laravel's vector methods.
 - `src/Query/Processors/MatrixOneProcessor.php` — normalizes column/index metadata.
-- `src/Schema/Grammar.php`, `Builder.php` — DDL and introspection overrides (foreign keys parsed from `SHOW CREATE TABLE` by `MatrixOneProcessor::processCreateTableForeignKeys()`), vector columns and indexes. Blueprint additions (`vector64`, and `vectorIndex`/`dropVectorIndex` on Laravel versions lacking them) are macros registered in `MatrixOneServiceProvider::registerBlueprintMacros()`; do not reintroduce a Blueprint subclass.
+- `src/Schema/Grammar.php`, `Builder.php` — DDL and introspection overrides (foreign keys parsed from `SHOW CREATE TABLE` by `MatrixOneProcessor::processCreateTableForeignKeys()`), vector columns and indexes. Blueprint additions (`vector64`, `clusterBy`, `fullText2`/`dropFullText2`, and `vectorIndex`/`dropVectorIndex` on Laravel versions lacking them) are macros registered in `MatrixOneServiceProvider::registerBlueprintMacros()`; do not reintroduce a Blueprint subclass.
 - `src/Eloquent/Casts/AsVector.php`, `src/Support/Vector.php` — vector literal conversion.
 
 `resources/boost/` holds the Laravel Boost guideline and the `matrixone-development` skill shipped to applications; update them together with `docs/docs/compatibility.md` whenever a pitfall or workaround changes.
@@ -43,7 +43,8 @@ Local runs may use a gitignored `phpunit.xml` (copied from `phpunit.xml.dist`) t
 - Boolean expressions return the strings `"true"`/`"false"`; `(bool) "false"` is true in PHP. Any grammar query whose result is cast to bool must return an integer (`if(expr, 1, 0)`).
 - No `ROLLBACK TO SAVEPOINT`; nested transactions are flattened (`nested_transactions` => `rollback_only` makes the outermost commit throw instead).
 - An unconditional `DELETE` with `foreign_key_checks = 0` corrupts FK metadata — keep the `where 1 = 1` safeguard.
-- 4.2.4 to 4.2.6: inserting into a table with both a foreign key and a FULLTEXT index panics.
+- 4.2.4 to 4.2.6: inserting into a table with both a foreign key and a FULLTEXT index panics (FULLTEXT2 does not).
+- FULLTEXT2 is asynchronous (new rows found after ~10 s, `syncFullText2()` forces it in a few seconds), only takes the `ngram`/`json` parsers and splits words at accented characters. FULLTEXT stays the default everywhere.
 - 4.2.4 to 4.2.6: a correlated `count(*)` with an extra predicate, selected by a single primary key (`loadCount()` on one soft-deletable model), panics and leaves the connection mid-response. Tests that trigger it must not share a connection with later tests.
 - 4.2.6: an IVF search with a scalar-subquery vector (`nearestTo($column, $subquery)`) plus a primary-key filter panics (larger tables) or returns too few rows. The index path also needs a NOT NULL vector column.
 - `LAST_INSERT_ID()` is wrong on tables with a FULLTEXT index; `insertGetId()` must keep using `insert ... returning`.

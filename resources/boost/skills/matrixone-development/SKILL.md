@@ -38,7 +38,7 @@ The database must exist before migrating (`create database laravel;`).
 
 | Need | Do | Avoid |
 |------|----|-------|
-| Full-text search | `$table->fullText([...])` on a table **without its own foreign keys** | FULLTEXT + foreign key on one table: inserts panic on 4.2.4 to 4.2.6 |
+| Full-text search | `$table->fullText([...])` on a table **without its own foreign keys**, or `$table->fullText2([...])` | FULLTEXT + foreign key on one table: inserts panic on 4.2.4 to 4.2.6 |
 | Search inside JSON | `$table->fullText('meta')->parser('json')` | Indexing the JSON column directly |
 | CJK text | `->parser('ngram')` | Default parser for Chinese/Japanese |
 | Search box / autocomplete | `suggest()`, `whereStartsWith()`, `whereContains()` (no fuzzy search on MatrixOne) | `->parser('ngram')` for partial Latin words (it indexes whole words), raw `like` with unescaped `%`/`_` |
@@ -72,6 +72,8 @@ Schema::create('articles', function (Blueprint $table) {
 ```
 
 Enforce the relationship in application code (validation, `exists` rule, observers) when the foreign key has to be dropped.
+
+Alternatively keep the foreign key and use `$table->fullText2([...])`: FULLTEXT2 does not panic and is faster, but new and changed rows become searchable only after about ten seconds (`DB::connection('matrixone')->syncFullText2('articles')` forces it, a few seconds per call). Do not choose it when code searches right after writing (or in tests without a sync). It only takes the `ngram` (default, splits accented words: fold accents for Vietnamese) and `json` parsers, and two FULLTEXT2 indexes cannot share a column.
 
 ## Queries
 
@@ -180,9 +182,7 @@ DB::connection('matrixone')->withSessionVariables(
     fn ($db) => Article::searchFullText('body', $term)->get(),
 );
 
-// FULLTEXT2 (experimental, asynchronous) and HNSW need their flag when created:
-DB::connection('matrixone')->withSessionVariables(['experimental_fulltext2_index' => 1],
-    fn ($db) => $db->statement('create fulltext2 index articles_body_ft2 on articles (body)'));
+// fullText2() and vectorIndex()->hnsw() enable their experimental flag themselves.
 ```
 
 Useful variables: `ft_relevancy_algorithm` (`TF-IDF`/`BM25`, typos are accepted silently), `fulltext_bloom_filter_pushdown`, `experimental_fulltext2_index`, `experimental_hnsw_index`. `ngram_token_size` is global only.
@@ -190,7 +190,7 @@ Useful variables: `ft_relevancy_algorithm` (`TF-IDF`/`BM25`, typos are accepted 
 ## Laravel Scout
 
 - `SCOUT_DRIVER=matrixone`: models stored in MatrixOne; full-text columns, relevance ordering, `->semantic()` and `->hybrid()` on a vector column. Do not use Scout's `database` engine for models with full-text columns.
-- `SCOUT_DRIVER=matrixone-index`: models stored in any database, MatrixOne used as a separate search index. Configure `config('scout.matrixone-index')`: `connection` and `index-settings` per model (`fulltext`, `filterable`, `sortable` with types, `parser`, `fold_accents`, `prefix`, `mode`, `embedding`). Every attribute used in `where`/`whereIn`/`orderBy` must be declared as filterable or sortable.
+- `SCOUT_DRIVER=matrixone-index`: models stored in any database, MatrixOne used as a separate search index. Configure `config('scout.matrixone-index')`: `connection` and `index-settings` per model (`fulltext`, `filterable`, `sortable` with types, `parser`, `fold_accents`, `prefix`, `mode`, `embedding`, `index` = `fulltext` or `fulltext2`). With `fulltext2`, call `app(EngineManager::class)->engine('matrixone-index')->syncIndex(Model::class)` after bulk imports and in tests. Every attribute used in `where`/`whereIn`/`orderBy` must be declared as filterable or sortable.
 - Full-text has no language support: no stemming (`learn` ≠ `learning`), no stopwords, accents significant (`tieng` ≠ `tiếng`). Use `prefix`, `fold_accents` / `TextNormalizer::foldAccents()` and the `ngram` parser for CJK.
 
 ### Embeddings (semantic and hybrid search)
@@ -250,7 +250,7 @@ Article::search('songs')->hybrid(textWeight: 1, semanticWeight: 2)->get();
 
 | Symptom | Trigger | Avoid |
 |---------|---------|-------|
-| `panic runtime error: invalid memory address` on INSERT | Table with a foreign key **and** a FULLTEXT index | Separate the FULLTEXT table from foreign keys |
+| `panic runtime error: invalid memory address` on INSERT | Table with a foreign key **and** a FULLTEXT index | Separate the FULLTEXT table from foreign keys, or use `fullText2()` |
 | `Error reading result set's header`, then the next queries fail or a test hangs | `loadCount()` / `withCount()` (also `withSum()`-style aggregates using `count(*)`) on **one** parent selected by primary key (`find($id)`, `where('id', $id)`, `whereIn('id', [$id])`), when the related query has an extra condition such as SoftDeletes | Count separately for a single model: `$user->posts()->count()`. `withCount()` over several parents and `withExists()` are fine |
 | Wrong IDs from raw `LAST_INSERT_ID()` | Tables with a FULLTEXT index | Use `insertGetId()` / Eloquent (the driver uses `RETURNING`) |
 | `Error reading result set's header` (4.2.6), or fewer rows than the limit | `nearestTo()` with a subquery vector plus a primary-key filter (`whereKeyNot($id)`, `id > ...`) on an IVF-indexed column | Fetch one more row and drop the source row in PHP: `->get()->except($id)` |

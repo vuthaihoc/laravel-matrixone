@@ -20,7 +20,7 @@ The package ships resources for [Laravel Boost](https://laravel.com/docs/boost) 
 
 The **guideline** is short. It holds only the rules an agent must never break:
 
-- no FULLTEXT index on a table that has its own foreign key (MatrixOne 4.2.4 to 4.2.6 panic on insert);
+- no FULLTEXT index on a table that has its own foreign key (MatrixOne 4.2.4 to 4.2.6 panic on insert), unless it is an asynchronous FULLTEXT2 index;
 - `=` comparisons and unique indexes are case-sensitive, so normalize with the `Lowercase` cast;
 - JSON columns take no defaults or indexes;
 - nested transactions do not roll back on their own (no savepoints);
