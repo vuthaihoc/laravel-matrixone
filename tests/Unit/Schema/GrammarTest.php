@@ -232,7 +232,8 @@ class GrammarTest extends TestCase
         $this->assertStringContainsString("column_name not like '\\_\\_mo\\_%'", $grammar->compileColumns(null, 'users'));
         $this->assertStringContainsString("column_name not like '\\_\\_mo\\_%'", $grammar->compileIndexes(null, 'users'));
         $this->assertStringContainsString('if(non_unique = 0, 1, 0) as `unique`', $grammar->compileIndexes(null, 'users'));
-        $this->assertStringContainsString('from mo_catalog.mo_foreign_keys', $grammar->compileForeignKeys(null, 'users'));
+        $this->assertSame('show create table `users`', $grammar->compileForeignKeys(null, 'users'));
+        $this->assertSame('show create table `app`.`we``ird`', $grammar->compileForeignKeys('app', 'we`ird'));
         $this->assertStringContainsString("'mo_catalog'", $grammar->compileTables(null));
         $this->assertStringContainsString("'system_metrics'", $grammar->compileSchemas());
         $this->assertStringStartsWith('select if(exists (', $grammar->compileTableExists(null, 'users'));

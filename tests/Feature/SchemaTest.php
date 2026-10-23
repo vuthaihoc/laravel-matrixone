@@ -157,6 +157,59 @@ class SchemaTest extends TestCase
         $this->assertSame([], Schema::getForeignKeys('sc_posts'));
     }
 
+    public function testForeignKeysKeepColumnOrderSchemaAndActions(): void
+    {
+        DB::statement('create database if not exists laravel_matrixone_fk_test');
+
+        try {
+            DB::statement('create table laravel_matrixone_fk_test.sc_regions (id int primary key)');
+
+            Schema::create('sc_pairs', function (Blueprint $table) {
+                $table->integer('a');
+                $table->integer('b');
+                $table->primary(['a', 'b']);
+            });
+
+            Schema::create('sc_links', function (Blueprint $table) {
+                $table->id();
+                $table->integer('x')->nullable();
+                $table->integer('y')->nullable();
+                $table->integer('region_id')->nullable();
+                $table->unsignedBigInteger('parent_id')->nullable();
+                $table->foreign(['y', 'x'])->references(['b', 'a'])->on('sc_pairs')->nullOnDelete()->cascadeOnUpdate();
+                $table->foreign('region_id')->references('id')->on('laravel_matrixone_fk_test.sc_regions');
+                $table->foreign('parent_id')->references('id')->on('sc_links')->noActionOnDelete();
+            });
+
+            $keys = collect(Schema::getForeignKeys('sc_links'))->keyBy('name');
+
+            $this->assertSame([
+                'name' => 'sc_links_y_x_foreign',
+                'columns' => ['y', 'x'],
+                'foreign_schema' => DB::getDatabaseName(),
+                'foreign_table' => 'sc_pairs',
+                'foreign_columns' => ['b', 'a'],
+                'on_update' => 'cascade',
+                'on_delete' => 'set null',
+            ], $keys['sc_links_y_x_foreign']);
+            $this->assertSame('laravel_matrixone_fk_test', $keys['sc_links_region_id_foreign']['foreign_schema']);
+            $this->assertSame('sc_regions', $keys['sc_links_region_id_foreign']['foreign_table']);
+            $this->assertSame('no action', $keys['sc_links_parent_id_foreign']['on_delete']);
+
+            // A schema-qualified table name reads that schema's table.
+            $this->assertSame($keys->values()->all(), Schema::getForeignKeys(DB::getDatabaseName().'.sc_links'));
+
+            // Like MySQL, a missing table or a view has no foreign keys.
+            DB::statement('create view sc_links_view as select * from sc_links');
+            $this->assertSame([], Schema::getForeignKeys('sc_missing'));
+            $this->assertSame([], Schema::getForeignKeys('sc_links_view'));
+        } finally {
+            Schema::dropAllViews();
+            Schema::dropAllTables();
+            DB::statement('drop database if exists laravel_matrixone_fk_test');
+        }
+    }
+
     public function testAlterTable(): void
     {
         Schema::create('sc_alter', function (Blueprint $table) {
