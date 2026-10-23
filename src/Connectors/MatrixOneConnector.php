@@ -9,6 +9,25 @@ use PDO;
 class MatrixOneConnector extends MySqlConnector
 {
     /**
+     * Establish a database connection.
+     *
+     * Laravel's MySQL connector runs `use <database>` after connecting, which
+     * MatrixOne rejects for ordinary users ("do not have privilege to execute
+     * the statement") even when their role owns the database. The DSN already
+     * selects the database, so the statement is skipped unless
+     * `use_db_after_connecting` is set to true explicitly.
+     *
+     * @param  array<string, mixed>  $config
+     * @return PDO
+     */
+    public function connect(array $config)
+    {
+        $config['use_db_after_connecting'] ??= false;
+
+        return parent::connect($config);
+    }
+
+    /**
      * Get the PDO options based on the configuration.
      *
      * MatrixOne rejects placeholders in some positions that MySQL accepts

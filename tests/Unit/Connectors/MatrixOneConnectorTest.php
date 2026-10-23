@@ -9,6 +9,48 @@ use PDO;
 
 class MatrixOneConnectorTest extends TestCase
 {
+    public function testTheDatabaseIsNotSelectedWithUseAfterConnecting(): void
+    {
+        $this->assertSame([], $this->statementsRunOnConnect(['database' => 'app']));
+    }
+
+    public function testUseAfterConnectingCanBeEnabled(): void
+    {
+        $this->assertSame(['use `app`;'], $this->statementsRunOnConnect(['database' => 'app', 'use_db_after_connecting' => true]));
+    }
+
+    /**
+     * Connect with a fake PDO and return the statements it executed.
+     *
+     * @param  array<string, mixed>  $config
+     * @return list<string>
+     */
+    private function statementsRunOnConnect(array $config): array
+    {
+        $statements = [];
+
+        $pdo = $this->createMock(PDO::class);
+        $pdo->method('exec')->willReturnCallback(function (string $statement) use (&$statements) {
+            $statements[] = $statement;
+
+            return 0;
+        });
+
+        $connector = new class($pdo) extends MatrixOneConnector
+        {
+            public function __construct(private PDO $pdo) {}
+
+            public function createConnection($dsn, array $config, array $options)
+            {
+                return $this->pdo;
+            }
+        };
+
+        $connector->connect(array_merge(['host' => '127.0.0.1', 'port' => 6001], $config));
+
+        return $statements;
+    }
+
     public function testCompileSetSessionVariables(): void
     {
         // Any PDO can quote; SQLite keeps the test offline.
