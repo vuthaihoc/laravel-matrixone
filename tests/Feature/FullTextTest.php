@@ -2,6 +2,7 @@
 
 namespace MatrixOne\Tests\Feature;
 
+use Illuminate\Database\QueryException;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -151,16 +152,53 @@ class FullTextTest extends TestCase
 
     public function testExperimentalFullText2IndexNeedsItsSessionVariable(): void
     {
-        $this->connection()->withSessionVariables(['experimental_fulltext2_index' => 1], function (MatrixOneConnection $connection) {
-            $connection->statement('create fulltext2 index ft_docs_body_ft2 on ft_docs (body)');
-        });
+        $this->expectException(QueryException::class);
+        $this->expectExceptionMessage('experimental_fulltext2_index is not enabled');
 
-        $this->assertSame(['Another database'], DB::table('ft_docs')->whereFullText('body', 'vector')->pluck('title')->all());
+        $this->connection()->statement('create fulltext2 index ft_docs_body_ft2 on ft_docs (body)');
+    }
 
-        $this->connection()->statement('alter table ft_docs alter reindex ft_docs_body_ft2 fulltext2 force_sync');
+    public function testFullText2IndexOnATableWithAForeignKey(): void
+    {
+        Schema::dropIfExists('ft2_comments');
 
-        Schema::table('ft_docs', fn (Blueprint $table) => $table->dropIndex('ft_docs_body_ft2'));
-        $this->assertFalse(Schema::hasIndex('ft_docs', 'ft_docs_body_ft2'));
+        try {
+            // A FULLTEXT index on a table with a foreign key makes inserts
+            // panic on MatrixOne 4.2.4 to 4.2.6; FULLTEXT2 does not.
+            Schema::create('ft2_comments', function (Blueprint $table) {
+                $table->id();
+                $table->foreignId('doc_id')->constrained('ft_docs');
+                $table->text('body');
+                $table->fullText2('body');
+            });
+
+            $docId = (int) DB::table('ft_docs')->value('id');
+            $first = DB::table('ft2_comments')->insertGetId(['doc_id' => $docId, 'body' => 'vector search engine']);
+            DB::table('ft2_comments')->insert(['doc_id' => $docId, 'body' => 'database tuning']);
+
+            $this->assertSame((int) DB::table('ft2_comments')->min('id'), $first);
+            $this->assertSame(['ft2_comments_body_fulltext2'], $this->connection()->syncFullText2('ft2_comments'));
+            $this->assertSame([], $this->connection()->syncFullText2('ft_docs'));
+
+            $this->assertSame(['vector search engine'], DB::table('ft2_comments')->whereFullText('body', 'vector', ['mode' => 'boolean'])->pluck('body')->all());
+            $this->assertSame(
+                ['database tuning', 'vector search engine'],
+                DB::table('ft2_comments')->searchFullText('body', FullTextQuery::anyOf('tuning engine'))->orderBy('id', 'desc')->pluck('body')->all()
+            );
+
+            $index = collect(Schema::getIndexes('ft2_comments'))->firstWhere('name', 'ft2_comments_body_fulltext2');
+            $this->assertSame(['body'], $index['columns'] ?? null);
+            $this->assertSame('fulltext2', $index['type'] ?? null);
+
+            Schema::table('ft2_comments', fn (Blueprint $table) => $table->renameIndex('ft2_comments_body_fulltext2', 'ft2_comments_body_ft2'));
+            $this->assertSame('fulltext2', collect(Schema::getIndexes('ft2_comments'))->firstWhere('name', 'ft2_comments_body_ft2')['type'] ?? null);
+            $this->assertSame(['ft2_comments_body_ft2'], $this->connection()->syncFullText2('ft2_comments', 'ft2_comments_body_ft2'));
+
+            Schema::table('ft2_comments', fn (Blueprint $table) => $table->dropFullText2('ft2_comments_body_ft2'));
+            $this->assertFalse(Schema::hasIndex('ft2_comments', 'ft2_comments_body_ft2'));
+        } finally {
+            Schema::dropIfExists('ft2_comments');
+        }
     }
 
     public function testDropFullTextAndPrefixIndexOnText(): void

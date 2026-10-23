@@ -6,6 +6,7 @@ use Illuminate\Database\Connection;
 use Illuminate\Database\Console\DbCommand as BaseDbCommand;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Schema\ColumnDefinition;
+use Illuminate\Support\Fluent;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Pulse\Storage\DatabaseStorage as PulseDatabaseStorage;
 use Laravel\Scout\EngineManager;
@@ -92,6 +93,31 @@ class MatrixOneServiceProvider extends ServiceProvider
         Blueprint::macro('clusterBy', function (array|string $columns) {
             /** @var Blueprint $this */
             return $this->addCommand('clusterBy', ['columns' => (array) $columns]);
+        });
+
+        // A FULLTEXT2 index (experimental, maintained asynchronously). It is
+        // built on fullText() so Laravel names it, with a "_fulltext2" suffix.
+        Blueprint::macro('fullText2', function (array|string $columns, ?string $name = null): Fluent {
+            /** @var Blueprint $this */
+            $command = $this->fullText($columns, $name);
+            $command['name'] = 'fulltext2';
+
+            if ($name === null) {
+                $command['index'] = preg_replace('/_fulltext$/', '_fulltext2', is_string($command->get('index')) ? $command->get('index') : '');
+            }
+
+            return $command;
+        });
+
+        Blueprint::macro('dropFullText2', function (array|string $index): Fluent {
+            /** @var Blueprint $this */
+            $command = $this->dropFullText($index);
+
+            if (is_array($index)) {
+                $command['index'] = preg_replace('/_fulltext$/', '_fulltext2', is_string($command->get('index')) ? $command->get('index') : '');
+            }
+
+            return $command;
         });
 
         // Laravel 13 ships vectorIndex()/dropVectorIndex(); older releases get

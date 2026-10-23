@@ -565,6 +565,40 @@ class MatrixOneConnection extends MySqlConnection
     }
 
     /**
+     * Bring a table's FULLTEXT2 indexes up to date. FULLTEXT2 indexes are
+     * maintained asynchronously, so new and changed rows become searchable
+     * after a delay (about ten seconds on MatrixOne 4.2.6); this forces them
+     * to catch up, e.g. after a bulk import or in tests. Each sync takes a few
+     * seconds however little changed. Tables without FULLTEXT2 indexes are
+     * left alone.
+     *
+     * @param  string|null  $index  one index; every FULLTEXT2 index of the table when null
+     * @return list<string> the synced indexes
+     */
+    public function syncFullText2(string $table, ?string $index = null): array
+    {
+        $schema = $this->getSchemaBuilder();
+        $grammar = $this->getSchemaGrammar();
+
+        $indexes = $index !== null
+            ? [$grammar instanceof SchemaGrammar ? $grammar->shortenIndexName($index) : $index]
+            : array_values(array_map(
+                fn (array $index): string => $index['name'],
+                array_filter($schema->getIndexes($table), fn (array $index): bool => $index['type'] === 'fulltext2'),
+            ));
+
+        foreach ($indexes as $name) {
+            $this->statement(sprintf(
+                'alter table %s alter reindex %s fulltext2 force_sync',
+                $this->getQueryGrammar()->wrapTable($table),
+                $this->getQueryGrammar()->wrap($name),
+            ));
+        }
+
+        return $indexes;
+    }
+
+    /**
      * Write a table's committed rows from memory to object storage (S3 in a
      * S3-backed deployment). Until then recent writes live in the WAL and in
      * memory; they are durable but not yet in the object store. Needs the

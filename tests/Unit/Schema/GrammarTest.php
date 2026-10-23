@@ -51,6 +51,42 @@ class GrammarTest extends TestCase
         $this->blueprintSql('posts', fn (Blueprint $table) => $table->fullText('title')->parser('ngram; drop table x'));
     }
 
+    public function testFullText2IndexEnablesItsSessionVariable(): void
+    {
+        $sql = $this->blueprintSql('posts', function (Blueprint $table) {
+            $table->fullText2(['title', 'body']);
+            $table->fullText2('meta', 'posts_meta_ft2')->parser('json');
+        });
+
+        $this->assertSame([
+            'set experimental_fulltext2_index = 1',
+            'alter table `posts` add fulltext2 `posts_title_body_fulltext2`(`title`, `body`)',
+            'set experimental_fulltext2_index = 1',
+            'alter table `posts` add fulltext2 `posts_meta_ft2`(`meta`) with parser json',
+        ], $sql);
+    }
+
+    public function testFullText2OnlyAcceptsItsParsers(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('ngram (default) and json');
+
+        $this->blueprintSql('posts', fn (Blueprint $table) => $table->fullText2('title')->parser('default'));
+    }
+
+    public function testDropFullText2(): void
+    {
+        $sql = $this->blueprintSql('posts', function (Blueprint $table) {
+            $table->dropFullText2(['title', 'body']);
+            $table->dropFullText2('posts_meta_ft2');
+        });
+
+        $this->assertSame([
+            'alter table `posts` drop index `posts_title_body_fulltext2`',
+            'alter table `posts` drop index `posts_meta_ft2`',
+        ], $sql);
+    }
+
     public function testVectorColumns(): void
     {
         $sql = $this->blueprintSql('docs', function (Blueprint $table) {

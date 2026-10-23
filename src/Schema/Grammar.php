@@ -194,13 +194,15 @@ class Grammar extends MySqlGrammar
 
         $type = match (true) {
             $index['unique'] => 'unique',
-            $index['type'] === 'fulltext' => 'fulltext',
+            in_array($index['type'], ['fulltext', 'fulltext2'], true) => $index['type'],
             default => 'index',
         };
 
+        $create = new Fluent(['index' => $command->to, 'columns' => $index['columns']]);
+
         return array_values(array_filter([
             $this->compileDropIndex($blueprint, new Fluent(['index' => $command->from])),
-            $this->compileKey($blueprint, new Fluent(['index' => $command->to, 'columns' => $index['columns']]), $type),
+            ...(array) ($type === 'fulltext2' ? $this->compileFulltext2($blueprint, $create) : $this->compileKey($blueprint, $create, $type)),
         ]));
     }
 
@@ -229,11 +231,18 @@ class Grammar extends MySqlGrammar
             ));
         }
 
-        if ($type === 'fulltext' && ! $this->tableHasPrimaryKey($blueprint)) {
+        $fullText = in_array($type, ['fulltext', 'fulltext2'], true);
+
+        if ($fullText && ! $this->tableHasPrimaryKey($blueprint)) {
             throw new RuntimeException(sprintf(
-                'MatrixOne needs a primary key on [%s] for a FULLTEXT index: add $table->id() or $table->primary(...) first.',
-                $blueprint->getTable()
+                'MatrixOne needs a primary key on [%s] for a %s index: add $table->id() or $table->primary(...) first.',
+                $blueprint->getTable(),
+                strtoupper($type)
             ));
+        }
+
+        if ($type === 'fulltext2' && $command->parser && ! in_array($command->parser, ['ngram', 'json'], true)) {
+            throw new InvalidArgumentException('A FULLTEXT2 index only supports the ngram (default) and json parsers.');
         }
 
         return sprintf('alter table %s add %s %s(%s)%s',
@@ -241,8 +250,22 @@ class Grammar extends MySqlGrammar
             $type,
             $this->wrap($this->shortenIndexName((string) $command->index)),
             $this->columnize($command->columns),
-            $type === 'fulltext' && $command->parser ? ' with parser '.$this->parserName($command->parser) : ''
+            $fullText && $command->parser ? ' with parser '.$this->parserName($command->parser) : ''
         );
+    }
+
+    /**
+     * Compile a FULLTEXT2 index (`$table->fullText2(...)`).
+     *
+     * FULLTEXT2 indexes are experimental and have to be enabled per session.
+     * They tokenize with ngram unless ->parser('json') is given, and are
+     * maintained asynchronously: see MatrixOneConnection::syncFullText2().
+     *
+     * @return string[]
+     */
+    public function compileFulltext2(Blueprint $blueprint, Fluent $command): array
+    {
+        return ['set experimental_fulltext2_index = 1', (string) $this->compileKey($blueprint, $command, 'fulltext2')];
     }
 
     /**
