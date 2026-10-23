@@ -17,6 +17,26 @@ class IndexSettingsTest extends TestCase
         $this->assertSame('natural', $settings->mode);
         $this->assertFalse($settings->foldAccents);
         $this->assertNull($settings->embedding);
+        $this->assertSame('fulltext', $settings->index);
+    }
+
+    public function testFullText2Index(): void
+    {
+        $this->assertSame('fulltext2', IndexSettings::fromArray(['index' => 'fulltext2', 'parser' => 'json'])->index);
+    }
+
+    public function testInvalidIndexType(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        IndexSettings::fromArray(['index' => 'hnsw']);
+    }
+
+    public function testFullText2OnlyAcceptsItsParsers(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        IndexSettings::fromArray(['index' => 'fulltext2', 'parser' => 'default']);
     }
 
     public function testTypedAttributes(): void

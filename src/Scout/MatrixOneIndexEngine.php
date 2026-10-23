@@ -275,14 +275,37 @@ class MatrixOneIndexEngine extends Engine implements SupportsSemanticSearch
                 $table->vector('embedding', $settings->embedding)->nullable();
             }
 
-            $fullText = $table->fullText('content');
+            $fullText = $settings->index === 'fulltext2'
+                ? $table->fullText2('content') // @phpstan-ignore method.notFound
+                : $table->fullText('content');
 
             if ($settings->parser !== null) {
-                $fullText->parser($settings->parser); // @phpstan-ignore method.notFound
+                $fullText->parser($settings->parser);
             }
         });
 
         $this->existingIndexes[$name] = true;
+    }
+
+    /**
+     * Bring the index of a model (instance, class or index name) up to date.
+     *
+     * FULLTEXT2 indexes ('index' => 'fulltext2') make new and changed
+     * documents searchable after a delay, like Meilisearch or Algolia; call
+     * this after a bulk import or in tests. Each sync takes a few seconds.
+     * FULLTEXT indexes are always up to date, so nothing is done for them.
+     */
+    public function syncIndex(Model|string $model): void
+    {
+        if (is_string($model) && is_subclass_of($model, Model::class)) {
+            $model = new $model;
+        }
+
+        $table = $model instanceof Model ? $model->indexableAs() : $model; // @phpstan-ignore method.notFound
+
+        if ($this->settings($model)->index === 'fulltext2' && $this->indexExists($table)) {
+            $this->connection()->syncFullText2($table);
+        }
     }
 
     /**

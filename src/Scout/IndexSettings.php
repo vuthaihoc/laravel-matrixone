@@ -19,6 +19,7 @@ use Stringable;
  *         'prefix' => true,                         // "learn" matches "learning"
  *         'mode' => 'natural',                      // 'boolean' keeps user operators
  *         'embedding' => 1536,                      // vector dimensions for ->semantic() / ->hybrid()
+ *         'index' => 'fulltext2',                   // default 'fulltext'; FULLTEXT2 is asynchronous
  *     ],
  */
 final class IndexSettings
@@ -40,6 +41,7 @@ final class IndexSettings
         public readonly bool $prefix,
         public readonly string $mode,
         public readonly ?int $embedding,
+        public readonly string $index = 'fulltext',
     ) {}
 
     /**
@@ -65,6 +67,15 @@ final class IndexSettings
             throw new InvalidArgumentException('The MatrixOne index embedding must be a number of dimensions.');
         }
 
+        $index = $settings['index'] ?? 'fulltext';
+        if (! in_array($index, ['fulltext', 'fulltext2'], true)) {
+            throw new InvalidArgumentException('The MatrixOne index type must be "fulltext" or "fulltext2".');
+        }
+
+        if ($index === 'fulltext2' && ! in_array($parser, [null, 'ngram', 'json'], true)) {
+            throw new InvalidArgumentException('A FULLTEXT2 index only supports the ngram (default) and json parsers.');
+        }
+
         $fulltext = $settings['fulltext'] ?? null;
 
         return new self(
@@ -82,6 +93,7 @@ final class IndexSettings
             (bool) ($settings['prefix'] ?? false),
             $mode,
             $embedding,
+            $index,
         );
     }
 

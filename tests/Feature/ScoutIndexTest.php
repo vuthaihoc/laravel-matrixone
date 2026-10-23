@@ -190,6 +190,44 @@ class ScoutIndexTest extends TestCase
         $this->assertSame([$article->id], IndexedArticle::search('learn')->get()->pluck('id')->all());
     }
 
+    public function testFullText2IndexIsSearchableOnceSynced(): void
+    {
+        $this->app['config']->set('scout.matrixone-index.index-settings.'.IndexedArticle::class.'.index', 'fulltext2');
+        $this->app->make(EngineManager::class)->forgetEngines();
+
+        $one = $this->article('Database tuning');
+        $both = $this->article('Database search engines', 'search and database');
+        $this->article('Cooking pasta');
+
+        $index = collect(Schema::connection('matrixone')->getIndexes('indexed_articles'))->firstWhere('type', 'fulltext2');
+        $this->assertSame(['content'], $index['columns'] ?? null);
+
+        $engine = $this->app->make(EngineManager::class)->engine('matrixone-index');
+        $this->assertInstanceOf(MatrixOneIndexEngine::class, $engine);
+        $engine->syncIndex(IndexedArticle::class);
+
+        $ids = IndexedArticle::search('database search')->get()->pluck('id')->all();
+        $this->assertSame($both->id, $ids[0]);
+        $this->assertEqualsCanonicalizing([$one->id, $both->id], $ids);
+
+        // Accents are folded before indexing, so ngram does not split words.
+        $article = $this->article('Học tiếng Việt ở Đà Nẵng');
+        $engine->syncIndex($article);
+        $this->assertSame([$article->id], IndexedArticle::search('Tiếng Việt')->get()->pluck('id')->all());
+    }
+
+    public function testSyncingAFullTextIndexDoesNothing(): void
+    {
+        $this->article('Database tuning');
+
+        $engine = $this->app->make(EngineManager::class)->engine('matrixone-index');
+        $this->assertInstanceOf(MatrixOneIndexEngine::class, $engine);
+
+        $engine->syncIndex('indexed_articles');
+        $engine->syncIndex('missing_index');
+        $this->assertCount(1, IndexedArticle::search('database')->get());
+    }
+
     public function testFiltersAndSorting(): void
     {
         $low = $this->article('Database one', '', ['views' => 5]);
