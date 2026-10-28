@@ -5,6 +5,7 @@ namespace MatrixOne\Tests\KnownIssues;
 /**
  * Last verified against MatrixOne 4.2.6: 23 failures (open issues, the 22 of
  * 4.2.4 plus one 4.2.6 panic) and 4 passes (issues fixed since 3.0.9, kept as regression checks).
+ * The recursive CTE test was added later and checked on 4.2.4 only.
  */
 class KnownIssuesTest extends TestCase
 {
@@ -476,5 +477,32 @@ class KnownIssuesTest extends TestCase
         );
 
         $this->assertSame([3, 5, 1, 2, 4], array_map(fn ($row) => (int) $row['id'], $rows));
+    }
+
+    /**
+     * SILENT WRONG RESULTS: a recursive CTE with several recursive members
+     * (here descendants by father and by mother) stops after the first
+     * iteration: 1,2 instead of 1,2,3,4,5. With the members in the other order
+     * (and now and then in this one) the query never finishes. MySQL 8 repeats
+     * the members until none returns new rows.
+     * Driver workaround: none; the docs advise a single recursive member joining
+     * on one column (an `or` join is correct but very slow).
+     */
+    public function testRecursiveCteWithSeveralRecursiveMembers(): void
+    {
+        $this->runSql(
+            'create table rc_people (id int primary key, father_id int, mother_id int)',
+            'insert into rc_people values (1, null, null), (2, 1, null), (3, 2, null), (4, 3, null), (5, null, 4)',
+        );
+
+        $rows = $this->runSqlWithTimeout(
+            10,
+            'with recursive r as (select id from rc_people where id = 1 '
+            .'union all select rc_people.id from rc_people join r on rc_people.father_id = r.id '
+            .'union all select rc_people.id from rc_people join r on rc_people.mother_id = r.id) '
+            .'select group_concat(id order by id) as ids from r',
+        );
+
+        $this->assertSame('1,2,3,4,5', $rows[0]['ids'], 'The recursive CTE stopped before reaching every descendant.');
     }
 }

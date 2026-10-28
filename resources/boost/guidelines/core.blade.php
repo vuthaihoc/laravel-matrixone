@@ -11,5 +11,6 @@
 - There is no fuzzy/trigram search; for autocomplete use `suggest()`, `whereStartsWith()` or `whereContains()`.
 - Use `whereFullText()`, `searchFullText()` and the vector helpers (`vector()` columns, `nearestTo()`, `whereVectorSimilarTo()`) instead of raw `MATCH ... AGAINST` or distance SQL.
 - Never select a correlated subquery with `limit` (e.g. `addSelect([... ->latest()->limit(1)])`): MatrixOne silently returns NULL for most rows. Use `latestOfMany()` / `ofMany()` relationships or aggregate subqueries.
+- Give a recursive CTE (`with recursive`) a single recursive member: with two recursive `select`s joined by `union all` (e.g. descendants by father and by mother) MatrixOne silently stops after the first iteration or never finishes. Join on one column (a normalized `parent_id`); an `or` join is correct but very slow.
 - For analytics use the driver's `timeWindow()`, `sample()`, `asOfSnapshot()` / `asOfTimestamp()` and `clusterBy()` rather than raw MatrixOne syntax; `clusterBy()` requires a table without a primary key.
 - Avoid raw `SELECT LAST_INSERT_ID()` and raw boolean expressions cast to PHP booleans; use `insertGetId()` / Eloquent keys and `exists()`.

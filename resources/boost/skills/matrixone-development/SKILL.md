@@ -258,6 +258,7 @@ Article::search('songs')->hybrid(textWeight: 1, semanticWeight: 2)->get();
 | **Silently wrong results** (`NULL` values) | A correlated scalar subquery with `limit`, e.g. `addSelect(['last' => Post::select('title')->whereColumn('user_id', 'users.id')->latest()->limit(1)])` | Use `hasOne(...)->latestOfMany()` / `ofMany()` relationships or aggregate subqueries (`max()`) |
 | `aggregate function sum, bad value [VARCHAR]` | `null as col` placeholders in a `UNION` | `cast(null as double) as col` |
 | **Silently wrong order** | A `desc` key after a boolean key: `orderByRaw('score is null, score desc')` | `orderBy('score', 'desc')` already sorts NULLs last; use `is null, x asc` only for ascending order; after a boolean key, wrap the DESC key: `coalesce(ratio, 0) desc` |
+| **Silently missing rows**, or a query that never finishes | A `with recursive` CTE with two recursive members (`union all` of two recursive selects, e.g. descendants by father and by mother) | One recursive member joining on one column (a normalized `parent_id`); an `or` join (`on t.father_id = r.id or t.mother_id = r.id`) is correct but very slow |
 
 After a server panic the driver drops the broken connection (and forgets its transaction) so later queries reconnect instead of hanging.
 

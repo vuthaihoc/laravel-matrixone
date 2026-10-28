@@ -49,6 +49,9 @@ MatrixOne speaks the MySQL 8.0 protocol but implements a subset of MySQL. This p
 
 - No fuzzy search: no trigram similarity, `levenshtein()` or `unaccent()`, and the `ngram` parser splits only CJK text into n-grams. `whereStartsWith()`, `whereContains()` and `suggest()` match prefixes and substrings (see [Suggestions](./full-text.md#suggestions-and-fuzzy-search)).
 
+- `CAST(x AS CHAR(n))` is refused when `n` is over 255 (`typeLen is over the MaxCharLen: 255`). MatrixOne accepts `CAST(x AS VARCHAR(n))`, which MySQL rejects; `CAST(x AS CHAR)` without a length works on both.
+- `SUM()` and `AVG()` reject boolean expressions (`invalid argument aggregate function sum, bad value [BOOL]`), so the MySQL idiom `sum(status = 'paid')` fails. Count with `sum(case when status = 'paid' then 1 else 0 end)` or `sum(if(status = 'paid', 1, 0))`.
+
 ## Not supported (throws)
 
 - Full-text query expansion (`whereFullText(..., ['expanded' => true])`)
@@ -75,6 +78,7 @@ composer test:known-issues
 - **4.2.4 to 4.2.6:** inserting into a table with both a foreign key and a FULLTEXT index panics in the query planner. Keep full-text indexes on tables without their own foreign keys, or use a FULLTEXT2 index (`fullText2()`), which does not panic.
 - **`RESTORE ... FROM SNAPSHOT` is a syntax error** on 4.2.4 to 4.2.6. Copy the rows back with `insertUsing()` and `asOfSnapshot()` ([Analytics › Restoring data](./analytics#restoring-data)).
 - **4.2.6: a subquery vector plus a primary-key filter breaks the vector index search.** `nearestTo('embedding', Post::select('embedding')->whereKey($id), 5)` combined with `whereKeyNot($id)` (or `id > ...`, `id not in (...)`) panics on tables of a few thousand rows (`Error reading result set's header`) and returns fewer rows than the limit on smaller ones. Fetch one more row and drop the source row in PHP ([Query Builder › Similar rows](./query-builder#similar-rows-the-vector-of-another-row)).
+- **Recursive CTEs with several recursive members return wrong results, silently** (seen on 4.2.4). In `with recursive r as (anchor union all select ... join r on t.father_id = r.id union all select ... join r on t.mother_id = r.id)` MatrixOne stops after the first iteration (only the anchor and its direct matches); with the members in the other order the query never finishes. MySQL repeats the members until none returns new rows. Write a single recursive member that joins on one column, e.g. a normalized `parent_id`. A single member with an `or` join (`on t.father_id = r.id or t.mother_id = r.id`) is correct but very slow: about 13 s for 10,000 rows, against 150 ms for a one-column join.
 - **A `DESC` key after a boolean `ORDER BY` key is ignored**: `order by score is null, score desc` returns rows in insertion order. To sort NULLs last, `order by score desc` already puts them last on MatrixOne; for ascending order `order by score is null, score asc` works. Wrapping the descending key in `coalesce()` also avoids the bug: `order by has_sync desc, coalesce(ratio, 0) desc`.
 - **`information_schema.referential_constraints` is not filtered by privileges**: an ordinary user sees the foreign key names and table names of every database in the account (but not the columns). The driver does not read it.
 - **FULLTEXT2** indexes (4.2.2+) are experimental and maintained asynchronously: new rows are found after about ten seconds. The driver creates them on request only (`fullText2()`, `'index' => 'fulltext2'`) and syncs them with `syncFullText2()`; see [Full-text › FULLTEXT2](./full-text#fulltext2-experimental).

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Documentation
+
+- Known issue: a recursive CTE with several recursive members (`union all` of two recursive selects) stops after the first iteration on MatrixOne 4.2.4 or never finishes; use one recursive member joining on one column. Reproduced in `tests/KnownIssues`, which can now fail a statement that does not answer in time instead of hanging.
+- Minor differences: `CAST(x AS CHAR(n))` is refused above 255, and `SUM()` / `AVG()` reject boolean expressions.
+
 ## 1.3.0 - 2026-10-23
 
 ### Added

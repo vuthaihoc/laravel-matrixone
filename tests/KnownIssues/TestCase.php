@@ -78,6 +78,41 @@ abstract class TestCase extends BaseTestCase
         return $rows;
     }
 
+    /**
+     * Run one statement on a fresh connection and return its rows, or fail
+     * when MatrixOne rejects it or does not answer within $seconds. A statement
+     * that timed out is killed so it does not keep running on the server.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function runSqlWithTimeout(int $seconds, string $statement): array
+    {
+        // mysqlnd reads the timeout when the connection is opened.
+        $previous = (string) ini_get('mysqlnd.net_read_timeout');
+        ini_set('mysqlnd.net_read_timeout', (string) $seconds);
+
+        try {
+            $pdo = self::connect();
+        } finally {
+            ini_set('mysqlnd.net_read_timeout', $previous);
+        }
+
+        $connectionId = (int) $pdo->query('select connection_id()')->fetchColumn();
+        $started = microtime(true);
+
+        try {
+            return @$pdo->query($statement)->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable $e) {
+            if (microtime(true) - $started < $seconds) {
+                $this->fail("MatrixOne rejected the statement.\nSQL: {$statement}\nError: {$e->getMessage()}");
+            }
+        }
+
+        self::connect()->exec("kill query {$connectionId}");
+
+        $this->fail("MatrixOne did not finish the statement within {$seconds} s (killed).\nSQL: {$statement}");
+    }
+
     private static function env(string $key, string $default): string
     {
         $value = getenv($key);
